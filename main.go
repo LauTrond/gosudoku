@@ -52,28 +52,6 @@ func recurseEval(s *Situation) []*[9][9]int {
 		s2.Set(try.Row, try.Col, n)
 		s2.Show("Guess", try.Row, try.Col)
 		subResult := recurseEval(s2)
-
-		/*
-		if len(subResult) == 0 {
-			//exclude inconsistency guess
-			fmt.Printf("inconsistency: exclude (%d,%d):%d\n",
-				try.Row, try.Col, n + 1)
-		} else {
-			//exclude known solve
-			for _, answer := range subResult {
-				for r := range loop9 {
-					for c := range loop9 {
-						if s.cells[r][c] < 0 {
-							fmt.Printf("known answer: exclude (%d,%d):%d\n",
-								r, c, answer[r][c] + 1)
-							s.Exclude(r, c, answer[r][c])
-						}
-					}
-				}
-			}
-		}
-		*/
-
 		result = append(result, subResult...)
 	}
 
