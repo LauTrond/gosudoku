@@ -243,31 +243,31 @@ func (ex *Excluding) Apply() (done, changed, consistent bool, applyCell RowCol) 
 
 		changed := false
 
-		collectionExclude := func(rc RowCol, n int) {
+		complexExclude := func(rc RowCol, n int) {
 			changed1 := false
 			if !ex.matchedCells[rc] {
 				changed1 = changed1 || ex.s.Exclude(rc.Row, rc.Col, n)
 			}
 			if changed1 {
-				fmt.Printf("collectionExclude(%d,%d,%d)\n", rc.Row, rc.Col, n + 1)
+				fmt.Printf("complexExclude(%d,%d):%d\n", rc.Row, rc.Col, n + 1)
 			}
 			changed = changed || changed1
 		}
 
 		if ex.sameRow {
 			for c := range loop9 {
-				collectionExclude(RowCol{ex.selectedCell.Row, c}, ex.selectedN)
+				complexExclude(RowCol{ex.selectedCell.Row, c}, ex.selectedN)
 			}
 		}
 		if ex.sameCol {
 			for r := range loop9 {
-				collectionExclude(RowCol{r, ex.selectedCell.Col}, ex.selectedN)
+				complexExclude(RowCol{r, ex.selectedCell.Col}, ex.selectedN)
 			}
 		}
 		if ex.sameBlock {
 			for r := range loop3 {
 				for c := range loop3 {
-					collectionExclude(ex.selectedCell.Block().LeftTop().Add(r, c), ex.selectedN)
+					complexExclude(ex.selectedCell.Block().LeftTop().Add(r, c), ex.selectedN)
 				}
 			}
 		}
