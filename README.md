@@ -77,7 +77,7 @@
 谜题写在txt文件中，可以作为参数来运行：
 
     $ cd $GOPATH/src/github.com/LauTrond/sudoku
-    $ go run . puzzles/2.txt
+    $ go run . puzzles/simple-01.txt
 
 使用 -h 参数显示命令选项：
 
