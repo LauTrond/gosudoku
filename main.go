@@ -201,7 +201,7 @@ func eval(s *Situation) bool {
 					done, changed2, consistency, cell := ex.Apply()
 					if !consistency {
 						if !*flagShowOnlyResult {
-							fmt.Printf("发生矛盾：区块(%d,%d)内没有单元格可以填入 %d\n", cell.Row+1, cell.Col+1, n+1)
+							fmt.Printf("发生矛盾：区块(%d行,%d列)内没有单元格可以填入 %d\n", R+1, C+1, n+1)
 						}
 						return false
 					}
