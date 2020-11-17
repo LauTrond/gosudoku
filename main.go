@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	flagShowOnlyResult = flag.Bool("result-only", false, "不显示中间步骤，只显示答案")
+	flagShowOnlyResult  = flag.Bool("result-only", false, "不显示中间步骤，只显示答案")
 	flagShowStopAtFirst = flag.Bool("stop-at-first", false, "找到一个答案即停止")
 )
 
@@ -76,8 +76,8 @@ func recurseEval(s *Situation) []*[9][9]int {
 	})
 	try := choices[0]
 
-    tryNumsForShow := make([]int, len(try.Nums))
-    for i, n := range try.Nums {
+	tryNumsForShow := make([]int, len(try.Nums))
+	for i, n := range try.Nums {
 		tryNumsForShow[i] = n + 1
 	}
 
@@ -153,8 +153,8 @@ func eval(s *Situation) bool {
 					ex := s.NewExcluding()
 					for rr := range loop3 {
 						for cc := range loop3 {
-							r := R * 3 + rr
-							c := C * 3 + cc
+							r := R*3 + rr
+							c := C*3 + cc
 							ex.Test(r, c, n)
 						}
 					}

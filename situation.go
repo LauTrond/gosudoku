@@ -226,6 +226,7 @@ func (ex *Excluding) Test(r, c, n int) {
 		ex.matchedCount++
 	}
 }
+
 // Apply 返回三种可能：
 // - A、所有选项都不合理，发生了矛盾。
 // - B、唯一合理的选项，则填入到局势中。
