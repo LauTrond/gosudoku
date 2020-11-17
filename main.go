@@ -12,6 +12,7 @@ import (
 var (
 	flagShowOnlyResult  = flag.Bool("result-only", false, "不显示中间步骤，只显示解")
 	flagShowStopAtFirst = flag.Bool("stop-at-first", false, "找到一个解即停止")
+	flagBenchmark = flag.Bool("b", false, "(Benchmark)相当于 -result-only 和 -stop-at-first 组合，同时显示运算耗时。")
 )
 
 const MsgUsage = `使用方法：
@@ -21,17 +22,17 @@ sudoku        从标准输入获取谜题
 
 `
 
-const MsgTip = `
-同时使用 -result-only 和 -stop-at-first 可以显示运算耗时。
-`
-
 func main() {
 	flag.CommandLine.Usage = func() {
 		fmt.Fprintf(os.Stderr, MsgUsage)
 		flag.CommandLine.PrintDefaults()
-		fmt.Fprintf(os.Stderr, MsgTip)
 	}
 	flag.Parse()
+	if *flagBenchmark {
+		*flagShowOnlyResult = true
+		*flagShowStopAtFirst = true
+	}
+
 	puzzle := loadPuzzle()
 	s := ParseSituation(puzzle)
 

@@ -84,11 +84,7 @@
     $ cd $GOPATH/src/github.com/LauTrond/sudoku
     $ go run . -h
 
-- 使用 -stop-at-first 计算出第一个结果就停止。
-- 使用 -result-only 只显示最终结果。
-- 同时使用 -stop-at-first -result-only 可以显示运算耗时。
-
-puzzles/hard-02.txt 是Google找到的号称"最难的数独题"，耗时约15毫秒：
+puzzles/hard-02.txt 是Google找到的号称"最难的数独"，耗时约15毫秒：
 
     $ cd $GOPATH/src/github.com/LauTrond/sudoku
     $ cat puzzles/hard-02.txt
@@ -102,7 +98,7 @@ puzzles/hard-02.txt 是Google找到的号称"最难的数独题"，耗时约15�
     ..85...1.
     .9....4..
     
-    $ go run . -result-only -stop-at-first puzzles/hard-02.txt
+    $ go run . -b puzzles/hard-02.txt
       
     找到了 1 个解
     ====================================
