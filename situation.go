@@ -27,7 +27,7 @@ type Situation struct {
 // 初始化一个数独谜题
 // puzzle 是一个9行的字符串（前后空行会自动去除），以空格和数字代表单元格
 // 其中空格代表未填入的单元格
-func NewSituation(puzzle string) *Situation {
+func ParseSituation(puzzle string) *Situation {
 	var s Situation
 	for r := range loop9 {
 		for c := range loop9 {
@@ -40,9 +40,6 @@ func NewSituation(puzzle string) *Situation {
 			panic(fmt.Errorf("row exceed"))
 		}
 		for c, n := range line {
-			if c > len(s.cells[r]) {
-				panic(fmt.Errorf("column exceed"))
-			}
 			if n >= '1' && n <= '9' {
 				s.Set(r, c, int(n-'1'))
 			}
@@ -236,10 +233,10 @@ func (ex *Excluding) Test(r, c, n int) {
 // - D、唯一合理的选项，但单元格早前已经被填入不同的数字，发生了矛盾。
 // - E、超过一个可能选项，不能确定。
 // 返回值：
-// - done = true: 局势 s 已经填入数字。只有选项 B 会返回 done=true，
-// - changed = true：局势 s 发生了改变。和 done 不同的是，即使没有填入数字也可能发生了改变，因为排除了某些选项。
-// - consistent = false：发生了矛盾，如果之前的所有推断没有错，这个局势显然无法完成。
-// - applyCell：如果有唯一合理的选项，返回该单元格的位置。
+// - done = true: 情况B。局势 s 已经填入数字。只有选项 B 会返回 done=true，
+// - changed = true：情况B和部分的E，局势 s 发生了改变。和 done 不同的是，即使没有填入数字也可能发生了改变，因为排除了某些选项。
+// - consistent = true：A、D 两种情况发生了矛盾，如果之前的所有推断没有错，这个局势显然无法完成。
+// - applyCell ：对于B、C、D三种情况，返回该单元格的位置。
 func (ex *Excluding) Apply() (done, changed, consistent bool, applyCell RowCol) {
 	switch ex.matchedCount {
 	case 0:
@@ -330,9 +327,10 @@ func (rc RowCol) Add(r, c int) RowCol {
 
 === 复杂排除法 ===
 
-虽然有多个可能选项，但这些选项是同一个数N，而且都在相同的互斥组中。
+虽然有多个可能填充选项，但这些选项是同一个数N，而且都在相同的互斥组中。
 那么同一互斥组的其他单元格可以排除。
-例如局势：
+
+例如：
 
      1      |            | 5   #   4
      9   6  |         7  | #   #   #

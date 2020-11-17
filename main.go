@@ -10,13 +10,14 @@ import (
 )
 
 var (
-	flagShowOnlyResult = flag.Bool("result-only", false, "")
+	flagShowOnlyResult = flag.Bool("result-only", false, "不显示中间步骤，只显示答案")
+	flagShowStopAtFirst = flag.Bool("stop-at-first", false, "找到一个答案即停止")
 )
 
 func main() {
 	flag.Parse()
 	puzzle := loadPuzzle()
-	s := NewSituation(puzzle)
+	s := ParseSituation(puzzle)
 
 	if !*flagShowOnlyResult {
 		s.Show("start", -1, -1)
@@ -88,6 +89,9 @@ func recurseEval(s *Situation) []*[9][9]int {
 		}
 		subResult := recurseEval(s2)
 		result = append(result, subResult...)
+		if len(result) > 0 && *flagShowStopAtFirst {
+			break
+		}
 	}
 
 	return result
