@@ -6,15 +6,31 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"sort"
+	"time"
 )
 
 var (
-	flagShowOnlyResult  = flag.Bool("result-only", false, "不显示中间步骤，只显示答案")
-	flagShowStopAtFirst = flag.Bool("stop-at-first", false, "找到一个答案即停止")
+	flagShowOnlyResult  = flag.Bool("result-only", false, "不显示中间步骤，只显示解")
+	flagShowStopAtFirst = flag.Bool("stop-at-first", false, "找到一个解即停止")
 )
 
+const MsgUsage = `使用方法：
+
+sudoku <file> 从文件加载谜题
+sudoku        从标准输入获取谜题
+
+`
+
+const MsgTip = `
+同时使用 -result-only 和 -stop-at-first 可以显示运算耗时。
+`
+
 func main() {
+	flag.CommandLine.Usage = func() {
+		fmt.Fprintf(os.Stderr, MsgUsage)
+		flag.CommandLine.PrintDefaults()
+		fmt.Fprintf(os.Stderr, MsgTip)
+	}
 	flag.Parse()
 	puzzle := loadPuzzle()
 	s := ParseSituation(puzzle)
@@ -22,14 +38,20 @@ func main() {
 	if !*flagShowOnlyResult {
 		s.Show("start", -1, -1)
 	}
+
+	startTime := time.Now()
 	result := recurseEval(s)
+	dur := time.Since(startTime)
 	if len(result) > 0 {
-		fmt.Printf("\n找到了 %d 个答案\n", len(result))
+		fmt.Printf("\n找到了 %d 个解\n", len(result))
 		for i, answer := range result {
 			ShowCells(answer, fmt.Sprintf("result %d", i), -1, -1)
 		}
 	} else {
 		s.Show("failed", -1, -1)
+	}
+	if *flagShowOnlyResult && *flagShowStopAtFirst {
+		fmt.Printf("\n总耗时：%v\n", dur)
 	}
 }
 
@@ -65,16 +87,33 @@ func recurseEval(s *Situation) []*[9][9]int {
 		return []*[9][9]int{&cells}
 	}
 
-	//当前没有找到确定的填充选项，所以获取所有可能选项，然后猜一个。
+	//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
+
 	result := make([]*[9][9]int, 0)
+	//获取所有可能的选项
 	choices := s.Choices()
 	if len(choices) == 0 {
 		return nil
 	}
-	sort.Slice(choices, func(i, j int) bool {
-		return len(choices[i].Nums) < len(choices[j].Nums)
-	})
+
+	hash := func(c *GuessItem) int {
+		return (c.Row * 277 + c.Col * 659) % 997
+	}
+	//compare 是选择算法，如果 c1 优于 c2 则返回 true
+	compare := func(c1, c2 *GuessItem) bool {
+		//Nums数量少的优先
+		if len(c1.Nums) != len(c2.Nums) {
+			return len(c1.Nums) < len(c2.Nums)
+		}
+		//随便一个吧
+		return hash(c1) < hash(c2)
+	}
 	try := choices[0]
+	for _, c := range choices {
+		if compare(c, try) {
+			try = c
+		}
+	}
 
 	tryNumsForShow := make([]int, len(try.Nums))
 	for i, n := range try.Nums {
@@ -161,7 +200,7 @@ func eval(s *Situation) bool {
 					done, changed2, consistency, cell := ex.Apply()
 					if !consistency {
 						if !*flagShowOnlyResult {
-							fmt.Printf("发生矛盾：区块内没有单元格可以填入 %d\n", n+1)
+							fmt.Printf("发生矛盾：区块(%d,%d)内没有单元格可以填入 %d\n", cell.Row+1, cell.Col+1, n+1)
 						}
 						return false
 					}
