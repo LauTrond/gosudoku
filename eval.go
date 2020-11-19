@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strings"
 )
 
 type SudokuContext struct {
@@ -96,10 +97,27 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 	for len(t.Confirms) > 0 || len(t.Conflicts) > 0 {
 		next := &Trigger{}
 		for _, rcn := range t.Confirms {
+			cellNumExcludes := s.cellNumExcludes[rcn.Row][rcn.Col]
+			rowExcludes := s.rowExcludes[rcn.Row][rcn.Num]
+			colExcludes := s.colExcludes[rcn.Col][rcn.Num]
+			blockExcludes := s.blockExcludes[rcn.Row/3][rcn.Col/3][rcn.Num]
 			if s.Set(next, rcn) {
 				ctx.evalCount++
 				if !*flagShowOnlyResult {
-					s.Show("", rcn.Row, rcn.Col)
+					title := ""
+					if cellNumExcludes == 8 {
+						title += fmt.Sprintf("单元格唯一可以填的数\n")
+					}
+					if rowExcludes == 8 {
+						title += fmt.Sprintf("该行唯一可以填 %d 的位置\n", rcn.Num+1)
+					}
+					if colExcludes == 8 {
+						title += fmt.Sprintf("该列唯一可以填 %d 的位置\n", rcn.Num+1)
+					}
+					if blockExcludes == 8 {
+						title += fmt.Sprintf("该区块唯一可以填 %d 的位置\n", rcn.Num+1)
+					}
+					s.Show(strings.TrimSuffix(title, "\n"), rcn.Row, rcn.Col)
 				}
 			}
 			if !checkConflicts(next) {
@@ -110,6 +128,9 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 			s.ExcludeByRules(next)
 		}
 		t = next
+	}
+	if s.Completed() && !*flagShowOnlyResult {
+		fmt.Println("找到了一个解")
 	}
 	return true
 }

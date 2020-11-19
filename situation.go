@@ -32,9 +32,9 @@ type Situation struct {
 	//numExcludes[n] 表示 n 的总排除次数
 	numExcludes [9]int
 
-	//cellExcludeNums[r][c] = x 表示 r 行 c 列 排除了 x 个数
+	//cellNumExcludes[r][c] = x 表示 r 行 c 列 排除了 x 个数
 	//等于 sum(cellExclude[r][c][...])
-	cellExcludeNums [9][9]int
+	cellNumExcludes [9][9]int
 
 	//rowExcludes[r][n] = x 表示第 r 行的 n 排除了 x 个单元格
 	//等于 sum(cellExclude[r][...][n])
@@ -192,7 +192,7 @@ func (s *Situation) ExcludeByRules(t *Trigger) {
 }
 
 func (s *Situation) excludeCellNumber(t *Trigger, inc int, r, c int) {
-	switch add(&s.cellExcludeNums[r][c], inc) {
+	switch add(&s.cellNumExcludes[r][c], inc) {
 	case 8:
 		n1 := 0
 		for n0 := range loop9 {
@@ -277,7 +277,13 @@ func (s *Situation) Choices() []*GuessItem {
 }
 
 func (s *Situation) Show(title string, r, c int) {
-	ShowCells(&s.cells, fmt.Sprintf("<%d> %s", s.setCount, title), r, c)
+	lines := strings.Split(title, "\n")
+	lines[0] = fmt.Sprintf("<%02d> %s", s.setCount, lines[0])
+	for i := 1 ; i < len(lines); i++ {
+		lines[i] = "     " + lines[i]
+	}
+	title = strings.Join(lines, "\n")
+	ShowCells(&s.cells, title, r, c)
 }
 
 func (s *Situation) CompareGuestItem(c1, c2 *GuessItem) bool {
