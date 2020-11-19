@@ -36,14 +36,14 @@ func main() {
 	}
 
 	puzzle := loadPuzzle()
-	s := ParseSituation(puzzle)
+	s, t := ParseSituation(puzzle)
 
 	if !*flagShowOnlyResult {
 		s.Show("开始", -1, -1)
 	}
 
 	startTime := time.Now()
-	result := newSudokuContext().recurseEval(s)
+	result := newSudokuContext().recurseEval(s, t)
 	dur := time.Since(startTime)
 	if len(result) > 0 {
 		fmt.Printf("\n找到了 %d 个解\n", len(result))
