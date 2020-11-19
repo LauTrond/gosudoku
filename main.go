@@ -10,10 +10,11 @@ import (
 )
 
 var (
-	flagShowOnlyResult  = flag.Bool("result-only", false, "不显示中间步骤，只显示解")
-	flagShowStopAtFirst = flag.Bool("stop-at-first", false, "找到一个解即停止")
-	flagShowDuration = flag.Bool("show-duration", false, "显示运算耗时")
-	flagBenchmark = flag.Bool("b", false, "(Benchmark)相当于 -result-only -stop-at-first -show-duration 组合")
+	flagShowOnlyResult  = flag.Bool("result", false, "不显示中间步骤，只显示解")
+	flagShowStopAtFirst = flag.Bool("one", false, "找到一个解即停止")
+	flagShowStat = flag.Bool("stat", false, "显示运算统计信息")
+	flagShowBranch = flag.Bool("branch", false, "显示分支结构")
+	flagBenchmark = flag.Bool("b", false, "(Benchmark)相当于 -result-only -stop-at-first -show-stat 组合")
 )
 
 const MsgUsage = `使用方法：
@@ -32,7 +33,7 @@ func main() {
 	if *flagBenchmark {
 		*flagShowOnlyResult = true
 		*flagShowStopAtFirst = true
-		*flagShowDuration = true
+		*flagShowStat = true
 	}
 
 	puzzle := loadPuzzle()
@@ -43,7 +44,8 @@ func main() {
 	}
 
 	startTime := time.Now()
-	result := newSudokuContext().recurseEval(s, t)
+	ctx := newSudokuContext()
+	result := ctx.recurseEval(s, t, "/")
 	dur := time.Since(startTime)
 	if len(result) > 0 {
 		fmt.Printf("\n找到了 %d 个解\n", len(result))
@@ -53,8 +55,8 @@ func main() {
 	} else {
 		s.Show("失败", -1, -1)
 	}
-	if *flagShowDuration {
-		fmt.Printf("\n总耗时：%v\n", dur)
+	if *flagShowStat {
+		fmt.Printf("\n总耗时：%v\n总推演次数：%d\n", dur, ctx.evalCount)
 	}
 }
 

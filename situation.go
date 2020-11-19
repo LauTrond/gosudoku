@@ -29,6 +29,9 @@ type Situation struct {
 	//cellExclude[r][c][n] = 1 表示单元格(r,c)排除n
 	cellExclude [9][9][9]int
 
+	//numExcludes[n] 表示 n 的总排除次数
+	numExcludes [9]int
+
 	//cellExcludeNums[r][c] = x 表示 r 行 c 列 排除了 x 个数
 	//等于 sum(cellExclude[r][c][...])
 	cellExcludeNums [9][9]int
@@ -139,6 +142,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		return false
 	}
 	s.cellExclude[r][c][n] = 1
+	s.numExcludes[n]++
 
 	s.excludeCellNumber(t, 1, r, c)
 	s.excludeRow(t, 1, r, n)
@@ -276,6 +280,25 @@ func (s *Situation) Show(title string, r, c int) {
 	ShowCells(&s.cells, fmt.Sprintf("<%d> %s", s.setCount, title), r, c)
 }
 
+func (s *Situation) CompareGuestItem(c1, c2 *GuessItem) bool {
+	//Nums数量少的优先
+	if len(c1.Nums) != len(c2.Nums) {
+		return len(c1.Nums) < len(c2.Nums)
+	}
+	//随便一个吧
+	return c1.Hash() < c2.Hash()
+}
+
+func (s *Situation) CompareNumInCell(rc RowCol, n1, n2 int) bool {
+	score1 := s.numExcludes[n1]
+	score2 := s.numExcludes[n2]
+	//score越高，说明这个数填得多，或占据更关键的位置，选这个数可能更快结束分支演算
+	if score1 != score2 {
+		return score1 > score2
+	}
+	base := rc.Row * 4 + rc.Col * 7
+	return (base + n1) % 9 < (base + n2) % 9}
+
 func ShowCells(cells *[9][9]int, title string, r, c int) {
 	fmt.Println("=============================")
 	fmt.Println(title)
@@ -382,15 +405,6 @@ func (t *Trigger) Conflict(msg string) {
 type GuessItem struct {
 	RowCol
 	Nums []int
-}
-
-func compareGuestItem(c1, c2 *GuessItem) bool {
-	//Nums数量少的优先
-	if len(c1.Nums) != len(c2.Nums) {
-		return len(c1.Nums) < len(c2.Nums)
-	}
-	//随便一个吧
-	return c1.Hash() < c2.Hash()
 }
 
 func add(p *int, n int) int {
