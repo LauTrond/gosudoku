@@ -40,24 +40,12 @@ type Situation struct {
 	//等于 sum(cellExclude[r][...][n])
 	rowExcludes [9][9]int
 
-	//rowSliceExcludes[r][C][n] = x 表示 r 行除 C 区块内的 n 排除了 x 个单元格
-	//rowSliceExcludes [9][3][9] int
-
 	//colExcludes[c][n] = x 表示第 c 列的 n 排除了 x 个单元格
 	//等于 sum(cellExclude[...][c][n])
 	colExcludes [9][9]int
 
-	//colSliceExcludes[c][R][n] = x 表示 c 列除 R 区块内的 n 排除了 x 个单元格
-	//colSliceExcludes [9][3][9]int
-
-	//blockExcludes[R][C][n] = x 表示区块 (R,C) 的 n 排除了 x 个单元格
+	//blockExcludes[R][C][n] = x 表示宫 (R,C) 的 n 排除了 x 个单元格
 	blockExcludes [3][3][9]int
-
-	//blockRowExcludes[R][C][r][n]  = x 表示区块 (R,C) 除 r 行内的 n 排除了 x 个单元格
-	//blockRowExcludes [3][3][3][9]int
-
-	//blockColExcludes[R][C][c][n]  = x 表示区块 (R,C) 除 c 列内的 n 排除了 x 个单元格
-	//blockColExcludes [3][3][3][9]int
 
 	setCount int
 }
@@ -144,37 +132,56 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	s.cellExclude[r][c][n] = 1
 	s.numExcludes[n]++
 
-	s.excludeCellNumber(t, 1, r, c)
-	s.excludeRow(t, 1, r, n)
-	s.excludeCol(t, 1, c, n)
-	s.excludeBlock(t, 1, r/3, c/3, n)
+	switch add(&s.cellNumExcludes[r][c], 1) {
+	case 8:
+		n1 := 0
+		for n0 := range loop9 {
+			n1 += n0 * (1 - s.cellExclude[r][c][n0])
+		}
+		t.Confirm(RCN(r, c, n1))
+	case 9:
+		t.Conflict(fmt.Sprintf("单元格(%d,%d)没有可填充数字", r+1, c+1))
+	}
 
-	return true
-}
+	switch add(&s.rowExcludes[r][n], 1) {
+	case 8:
+		c1 := 0
+		for c0 := range loop9 {
+			c1 += c0 * (1 - s.cellExclude[r][c0][n])
+		}
+		t.Confirm(RCN(r, c1, n))
+	case 9:
+		t.Conflict(fmt.Sprintf("第 %d 行没有单元格可填充 %d", r+1, n+1))
+	}
 
-func (s *Situation) Scan(t *Trigger) {
-	for r := range loop9 {
-		for c := range loop9 {
-			s.excludeCellNumber(t, 0, r, c)
+	switch add(&s.colExcludes[c][n], 1) {
+	case 8:
+		r1 := 0
+		for r0 := range loop9 {
+			r1 += r0 * (1 - s.cellExclude[r0][c][n])
 		}
+		t.Confirm(RCN(r1, c, n))
+	case 9:
+		t.Conflict(fmt.Sprintf("第 %d 列没有单元格可填充 %d", c+1, n+1))
 	}
-	for r := range loop9 {
-		for n := range loop9 {
-			s.excludeRow(t, 0, r, n)
-		}
-	}
-	for c := range loop9 {
-		for n := range loop9 {
-			s.excludeCol(t, 0, c, n)
-		}
-	}
-	for R := range loop3 {
-		for C := range loop3 {
-			for n := range loop9 {
-				s.excludeBlock(t, 0, R, C, n)
+
+	switch R,C := r/3,c/3; add(&s.blockExcludes[R][C][n], 1) {
+	case 8:
+		r1 := 0
+		c1 := 0
+		for r0 := range loop3 {
+			for c0 := range loop3 {
+				cellMatched := 1 - s.cellExclude[R*3+r0][C*3+c0][n]
+				r1 += r0 * cellMatched
+				c1 += c0 * cellMatched
 			}
 		}
+		t.Confirm(RCN(R*3+r1, C*3+c1, n))
+	case 9:
+		t.Conflict(fmt.Sprintf("宫(%d,%d)没有单元格可填充 %d", R+1, C+1, n+1))
 	}
+
+	return true
 }
 
 func (s *Situation) ExcludeByRules(t *Trigger) {
@@ -189,63 +196,6 @@ func (s *Situation) ExcludeByRules(t *Trigger) {
 
 	//X-Wing（列）
 	s.ApplyRuleXWingCol(t)
-}
-
-func (s *Situation) excludeCellNumber(t *Trigger, inc int, r, c int) {
-	switch add(&s.cellNumExcludes[r][c], inc) {
-	case 8:
-		n1 := 0
-		for n0 := range loop9 {
-			n1 += n0 * (1 - s.cellExclude[r][c][n0])
-		}
-		t.Confirm(RCN(r, c, n1))
-	case 9:
-		t.Conflict(fmt.Sprintf("单元格(%d,%d)没有可填充数字", r+1, c+1))
-	}
-}
-
-func (s *Situation) excludeRow(t *Trigger, inc int, r, n int) {
-	switch add(&s.rowExcludes[r][n], inc) {
-	case 8:
-		c1 := 0
-		for c0 := range loop9 {
-			c1 += c0 * (1 - s.cellExclude[r][c0][n])
-		}
-		t.Confirm(RCN(r, c1, n))
-	case 9:
-		t.Conflict(fmt.Sprintf("第 %d 行没有单元格可填充 %d", r+1, n+1))
-	}
-}
-
-func (s *Situation) excludeCol(t *Trigger, inc int, c, n int) {
-	switch add(&s.colExcludes[c][n], inc) {
-	case 8:
-		r1 := 0
-		for r0 := range loop9 {
-			r1 += r0 * (1 - s.cellExclude[r0][c][n])
-		}
-		t.Confirm(RCN(r1, c, n))
-	case 9:
-		t.Conflict(fmt.Sprintf("第 %d 列没有单元格可填充 %d", c+1, n+1))
-	}
-}
-
-func (s *Situation) excludeBlock(t *Trigger, inc int, R, C, n int) {
-	switch add(&s.blockExcludes[R][C][n], inc) {
-	case 8:
-		r1 := 0
-		c1 := 0
-		for r0 := range loop3 {
-			for c0 := range loop3 {
-				cellMatched := 1 - s.cellExclude[R*3+r0][C*3+c0][n]
-				r1 += r0 * cellMatched
-				c1 += c0 * cellMatched
-			}
-		}
-		t.Confirm(RCN(R*3+r1, C*3+c1, n))
-	case 9:
-		t.Conflict(fmt.Sprintf("区块(%d,%d)没有单元格可填充 %d", R+1, C+1, n+1))
-	}
 }
 
 // 获取当前无法排除的所有填充选项。

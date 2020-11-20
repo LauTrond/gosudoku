@@ -28,10 +28,9 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchPath strin
 		return nil
 	}
 
-	completed := s.Completed()
-	if completed {
+	if s.Completed() {
 		if *flagShowBranch {
-			fmt.Println(branchPath, "到达解")
+			fmt.Println(branchPath, "找到解")
 		}
 		cells := s.cells
 		return []*[9][9]int{&cells}
@@ -71,7 +70,11 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchPath strin
 		}
 	}
 	if *flagShowBranch {
-		fmt.Println(branchPath, fmt.Sprintf("找到 %d 个解", len(result)))
+		txt := "无解"
+		if len(result) > 0 {
+			txt = fmt.Sprintf("%d 个解", len(result))
+		}
+		fmt.Println(branchPath, txt)
 	}
 	return result
 }
@@ -115,7 +118,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 						title += fmt.Sprintf("该列唯一可以填 %d 的位置\n", rcn.Num+1)
 					}
 					if blockExcludes == 8 {
-						title += fmt.Sprintf("该区块唯一可以填 %d 的位置\n", rcn.Num+1)
+						title += fmt.Sprintf("该宫唯一可以填 %d 的位置\n", rcn.Num+1)
 					}
 					s.Show(strings.TrimSuffix(title, "\n"), rcn.Row, rcn.Col)
 				}
@@ -124,7 +127,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 				return false
 			}
 		}
-		if len(next.Confirms) == 0 {
+		if !s.Completed() && len(next.Confirms) == 0 {
 			s.ExcludeByRules(next)
 		}
 		t = next
