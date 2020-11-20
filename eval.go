@@ -9,6 +9,7 @@ import (
 
 type SudokuContext struct {
 	evalCount int
+	guessesCount int
 }
 
 func newSudokuContext() *SudokuContext {
@@ -56,14 +57,16 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchPath strin
 	result := make([]*[9][9]int, 0)
 	for _, n := range try.Nums {
 		s2 := s.Copy()
-		t = &Trigger{}
+		t = NewTrigger()
 		s2.Set(t, RCN(try.Row, try.Col, n))
 		ctx.evalCount++
+		ctx.guessesCount++
 		if !*flagShowOnlyResult {
 			s2.Show("在可能的选项里猜一个", try.Row, try.Col)
 		}
 		subResult := ctx.recurseEval(s2, t, path.Join(branchPath,
 			fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), try.Row+1, try.Col+1, n+1)))
+		s2.Release()
 		result = append(result, subResult...)
 		if len(result) > 0 && *flagShowStopAtFirst {
 			break
@@ -98,7 +101,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 		return false
 	}
 	for len(t.Confirms) > 0 || len(t.Conflicts) > 0 {
-		next := &Trigger{}
+		next := NewTrigger()
 		for _, rcn := range t.Confirms {
 			cellNumExcludes := s.cellNumExcludes[rcn.Row][rcn.Col]
 			rowExcludes := s.rowExcludes[rcn.Row][rcn.Num]

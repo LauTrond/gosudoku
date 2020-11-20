@@ -5,6 +5,7 @@ import (
 	"hash/crc64"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var (
@@ -54,7 +55,7 @@ type Situation struct {
 // puzzle 是一个9行的字符串（前后空行会自动去除），以点和数字代表单元格
 // 其中空格代表未填入的单元格
 func ParseSituation(puzzle string) (*Situation, *Trigger) {
-	s := newSituation()
+	s := NewSituation()
 	lines := strings.Split(strings.Trim(puzzle, "\n"), "\n")
 	t := &Trigger{}
 	for r, line := range lines {
@@ -72,13 +73,13 @@ func ParseSituation(puzzle string) (*Situation, *Trigger) {
 
 // 初始化一个数独谜题，不换行的81个字符
 //
-func ParseSituationFromLine(line string) (*Situation, *Trigger) {
+func ParseSituationFromLine(line []byte) (*Situation, *Trigger) {
 	if len(line) != 81 {
 		panic("invalid puzzle from line")
 	}
 
-	s := newSituation()
-	t := &Trigger{}
+	s := NewSituation()
+	t := NewTrigger()
 	for i, n := range line {
 		if n >= '1' && n <= '9' {
 			s.Set(t, RCN(i/9, i%9, int(n-'1')))
@@ -87,19 +88,36 @@ func ParseSituationFromLine(line string) (*Situation, *Trigger) {
 	return s, t
 }
 
-func newSituation() *Situation {
-	var s Situation
+var situationPool = sync.Pool{
+	New: func() interface{} {
+		return new(Situation)
+	},
+}
+
+var EmptySituation = func() *Situation {
+	s := new(Situation)
 	for r := range loop9 {
 		for c := range loop9 {
 			s.cells[r][c] = -1
 		}
 	}
-	return &s
+	return s
+}()
+
+func NewSituation() *Situation {
+	s := situationPool.Get().(*Situation)
+	*s = *EmptySituation
+	return s
+}
+
+func (s *Situation) Release() {
+	situationPool.Put(s)
 }
 
 func (s *Situation) Copy() *Situation {
-	s2 := *s
-	return &s2
+	s2 := situationPool.Get().(*Situation)
+	*s2 = *s
+	return s2
 }
 
 func (s *Situation) Count() int {
@@ -224,7 +242,7 @@ func (s *Situation) Choices() []*GuessItem {
 		}
 	}
 
-	result := make([]*GuessItem, 0)
+	result := make([]*GuessItem, 0, 32)
 	for rc, nums := range m {
 		result = append(result, &GuessItem{
 			RowCol: rc,
@@ -350,6 +368,12 @@ func RCN(r, c, n int) RowColNum {
 type Trigger struct {
 	Confirms  []RowColNum
 	Conflicts []string
+}
+
+func NewTrigger() *Trigger {
+	return &Trigger{
+		Confirms: make([]RowColNum, 0, 32),
+	}
 }
 
 func (t *Trigger) Confirm(rcn RowColNum) {
