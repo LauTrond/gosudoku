@@ -35,7 +35,7 @@ func TestBranch(t *testing.T) {
 		for i, n := range try.Nums {
 			s2 := s.Copy()
 			trg := &Trigger{}
-			s2.Set(trg, RCN(try.Row, try.Col, n))
+			s2.Set(trg, RowColNum{RowCol: try.RowCol, Num: n})
 			ok := newSudokuContext().logicalEval(s2, trg)
 			if !ok {
 				continue
@@ -48,7 +48,7 @@ func TestBranch(t *testing.T) {
 				}
 			}
 			s2.Show(fmt.Sprintf("try %d choice %d: finished=%v",
-				d, i, s2.Completed()), try.Row, try.Col)
+				d, i, s2.Completed()), int(try.Row), int(try.Col))
 		}
 	}
 }

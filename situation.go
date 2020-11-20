@@ -25,28 +25,28 @@ type Situation struct {
 	//cell[r][c] = n
 	//n >=0 : 单元格(r,c) 填入了数字n
 	//n == -1 : 单元格(r,c) 还没填入数字
-	cells [9][9]int
+	cells [9][9]int8
 
 	//cellExclude[r][c][n] = 1 表示单元格(r,c)排除n
-	cellExclude [9][9][9]int
+	cellExclude [9][9][9]int8
 
 	//numExcludes[n] 表示 n 的总排除次数
-	numExcludes [9]int
+	numExcludes [9]int8
 
 	//cellNumExcludes[r][c] = x 表示 r 行 c 列 排除了 x 个数
 	//等于 sum(cellExclude[r][c][...])
-	cellNumExcludes [9][9]int
+	cellNumExcludes [9][9]int8
 
 	//rowExcludes[r][n] = x 表示第 r 行的 n 排除了 x 个单元格
 	//等于 sum(cellExclude[r][...][n])
-	rowExcludes [9][9]int
+	rowExcludes [9][9]int8
 
 	//colExcludes[c][n] = x 表示第 c 列的 n 排除了 x 个单元格
 	//等于 sum(cellExclude[...][c][n])
-	colExcludes [9][9]int
+	colExcludes [9][9]int8
 
 	//blockExcludes[R][C][n] = x 表示宫 (R,C) 的 n 排除了 x 个单元格
-	blockExcludes [3][3][9]int
+	blockExcludes [3][3][9]int8
 
 	setCount int
 }
@@ -127,12 +127,12 @@ func (s *Situation) Count() int {
 //r 行 c 列填入 n
 //同时会执行同一互斥组的排除（修改 s.cellExclude）
 func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
-	r, c, n := rcn.Row, rcn.Col, rcn.Num
+	r, c, n := rcn.Extract()
 	if s.cells[r][c] != -1 {
 		return false
 	}
 	s.setCount++
-	s.cells[r][c] = n
+	s.cells[r][c] = int8(n)
 
 	for n0 := range loop9 {
 		if n0 != n {
@@ -165,7 +165,7 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 }
 
 func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
-	r, c, n := rcn.Row, rcn.Col, rcn.Num
+	r, c, n := rcn.Extract()
 	if s.cellExclude[r][c][n] != 0 {
 		return false
 	}
@@ -176,7 +176,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	case 8:
 		n1 := 0
 		for n0 := range loop9 {
-			n1 += n0 * (1 - s.cellExclude[r][c][n0])
+			n1 += n0 * (1 - int(s.cellExclude[r][c][n0]))
 		}
 		t.Confirm(RCN(r, c, n1))
 	case 9:
@@ -187,7 +187,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	case 8:
 		c1 := 0
 		for c0 := range loop9 {
-			c1 += c0 * (1 - s.cellExclude[r][c0][n])
+			c1 += c0 * (1 - int(s.cellExclude[r][c0][n]))
 		}
 		t.Confirm(RCN(r, c1, n))
 	case 9:
@@ -198,7 +198,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	case 8:
 		r1 := 0
 		for r0 := range loop9 {
-			r1 += r0 * (1 - s.cellExclude[r0][c][n])
+			r1 += r0 * (1 - int(s.cellExclude[r0][c][n]))
 		}
 		t.Confirm(RCN(r1, c, n))
 	case 9:
@@ -211,7 +211,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		c1 := 0
 		for r0 := range loop3 {
 			for c0 := range loop3 {
-				cellMatched := 1 - s.cellExclude[R*3+r0][C*3+c0][n]
+				cellMatched := 1 - int(s.cellExclude[R*3+r0][C*3+c0][n])
 				r1 += r0 * cellMatched
 				c1 += c0 * cellMatched
 			}
@@ -226,17 +226,17 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 
 // 获取当前无法排除的所有填充选项。
 func (s *Situation) Choices() []*GuessItem {
-	m := map[RowCol][]int{}
+	m := map[RowCol][]int8{}
 	for r := range loop9 {
 		for c := range loop9 {
 			if s.cells[r][c] >= 0 {
 				continue
 			}
 
-			cell := RowCol{r, c}
+			cell := RowCol{int8(r), int8(c)}
 			for n := range loop9 {
 				if s.cellExclude[r][c][n] == 0 {
-					m[cell] = append(m[cell], n)
+					m[cell] = append(m[cell], int8(n))
 				}
 			}
 		}
@@ -272,24 +272,24 @@ func (s *Situation) CompareGuestItem(c1, c2 *GuessItem) bool {
 }
 
 func (s *Situation) CompareNumInCell(rc RowCol, n1, n2 int) bool {
-	score1 := s.numExcludes[n1]
-	score2 := s.numExcludes[n2]
+	score1 := int(s.numExcludes[n1])
+	score2 := int(s.numExcludes[n2])
 	//score越高，说明这个数填得多，或占据更关键的位置，选这个数可能更快结束分支演算
 	if score1 != score2 {
 		return score1 > score2
 	}
-	base := rc.Row * 4 + rc.Col * 7
+	base := int(rc.Row) * 4 + int(rc.Col) * 7
 	return (base + n1) % 9 < (base + n2) % 9
 }
 
-func ShowCells(cells *[9][9]int, title string, r, c int) {
+func ShowCells(cells *[9][9]int8, title string, r, c int) {
 	fmt.Println("=============================")
 	fmt.Println(title)
 	for r1 := range loop9 {
 		for c1 := range loop9 {
 			s := " "
 			if n1 := cells[r1][c1]; n1 >= 0 {
-				s = strconv.Itoa(n1 + 1)
+				s = strconv.Itoa(int(n1 + 1))
 			}
 			if r1 == r && c1 == c {
 				fmt.Printf("[%s]", s)
@@ -323,7 +323,7 @@ func (s *Situation) Completed() bool {
 }
 
 type RowCol struct {
-	Row, Col int
+	Row, Col int8
 }
 
 func (rc RowCol) Block() RowCol {
@@ -342,28 +342,32 @@ func (rc RowCol) LeftTop() RowCol {
 
 func (rc RowCol) Add(r, c int) RowCol {
 	return RowCol{
-		rc.Row + r,
-		rc.Col + c,
+		rc.Row + int8(r),
+		rc.Col + int8(c),
 	}
 }
 
 func (rc RowCol) Hash() int {
-	return (rc.Row*277 + rc.Col*659) % 997
+	return (int(rc.Row)*277 + int(rc.Col)*659) % 997
 }
 
 type RowColNum struct {
 	RowCol
-	Num int
+	Num int8
 }
 
 func RCN(r, c, n int) RowColNum {
 	return RowColNum{
 		RowCol: RowCol{
-			Row: r,
-			Col: c,
+			Row: int8(r),
+			Col: int8(c),
 		},
-		Num: n,
+		Num: int8(n),
 	}
+}
+
+func (rcn RowColNum) Extract() (r, c, n int) {
+	return int(rcn.Row), int(rcn.Col), int(rcn.Num)
 }
 
 type Trigger struct {
@@ -393,10 +397,10 @@ func (t *Trigger) Conflict(msg string) {
 
 type GuessItem struct {
 	RowCol
-	Nums []int
+	Nums []int8
 }
 
-func add(p *int, n int) int {
+func add(p *int8, n int8) int8 {
 	*p += n
 	return *p
 }

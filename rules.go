@@ -49,7 +49,7 @@ func (s *Situation) ExcludeByRules(t *Trigger) {
 
 func (s *Situation) ApplyRuleMultiStandCol(t *Trigger) {
 	for n := range loop9 {
-		var rectColExcludes [3][9]int
+		var rectColExcludes [3][9]int8
 		for r := range loop9 {
 			for c := range loop9 {
 				rectColExcludes[r/3][c] += s.cellExclude[r][c][n]
@@ -60,7 +60,7 @@ func (s *Situation) ApplyRuleMultiStandCol(t *Trigger) {
 				for c := range loop3 {
 					sumBlockExcludes := 0
 					for _, i := range loop3skip[c] {
-						sumBlockExcludes += rectColExcludes[R][C*3+i]
+						sumBlockExcludes += int(rectColExcludes[R][C*3+i])
 					}
 					if sumBlockExcludes == 6 {
 						for _, r0 := range loop9skip[R] {
@@ -69,7 +69,7 @@ func (s *Situation) ApplyRuleMultiStandCol(t *Trigger) {
 					}
 					sumColExcludes := 0
 					for _, i := range loop3skip[R] {
-						sumColExcludes += rectColExcludes[i][C*3+c]
+						sumColExcludes += int(rectColExcludes[i][C*3+c])
 					}
 					if sumColExcludes == 6 {
 						for r0 := range loop3 {
@@ -86,7 +86,7 @@ func (s *Situation) ApplyRuleMultiStandCol(t *Trigger) {
 
 func (s *Situation) ApplyRuleMultiStandRow(t *Trigger) {
 	for n := range loop9 {
-		var rectRowExcludes [9][3]int
+		var rectRowExcludes [9][3]int8
 		for r := range loop9 {
 			for c := range loop9 {
 				rectRowExcludes[r][c/3] += s.cellExclude[r][c][n]
@@ -97,7 +97,7 @@ func (s *Situation) ApplyRuleMultiStandRow(t *Trigger) {
 				for r := range loop3 {
 					sumBlockExcludes := 0
 					for _, i := range loop3skip[r] {
-						sumBlockExcludes += rectRowExcludes[R*3+i][C]
+						sumBlockExcludes += int(rectRowExcludes[R*3+i][C])
 					}
 					if sumBlockExcludes == 6 {
 						for _, c0 := range loop9skip[C] {
@@ -107,7 +107,7 @@ func (s *Situation) ApplyRuleMultiStandRow(t *Trigger) {
 
 					sumRowExcludes := 0
 					for _, i := range loop3skip[C] {
-						sumRowExcludes += rectRowExcludes[R*3+r][i]
+						sumRowExcludes += int(rectRowExcludes[R*3+r][i])
 					}
 					if sumRowExcludes == 6 {
 						for _, r0 := range loop3skip[r] {
@@ -129,7 +129,7 @@ func (s *Situation) ApplyRuleXWingRow(t *Trigger) {
 			if s.rowExcludes[r][n] == 7 {
 				rowHash := 0
 				for c := range loop9 {
-					rowHash += s.cellExclude[r][c][n] << c
+					rowHash += int(s.cellExclude[r][c][n]) << c
 				}
 				buckets[rowHash] = append(buckets[rowHash], r)
 			}
@@ -164,7 +164,7 @@ func (s *Situation) ApplyRuleXWingCol(t *Trigger) {
 			if s.colExcludes[c][n] == 7 {
 				colHash := 0
 				for r := range loop9 {
-					colHash += s.cellExclude[r][c][n] << r
+					colHash += int(s.cellExclude[r][c][n]) << r
 				}
 				buckets[colHash] = append(buckets[colHash], c)
 			}

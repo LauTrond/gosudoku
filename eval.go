@@ -18,7 +18,7 @@ func newSudokuContext() *SudokuContext {
 
 // recurseEval 开始推断局势 s，并返回所有可能的终局。
 // 如果返回nil，表示这个局势有矛盾，不存在正确的解答。
-func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchPath string) []*[9][9]int {
+func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchPath string) []*[9][9]int8 {
 	if *flagShowBranch {
 		fmt.Println(branchPath, "开始")
 	}
@@ -34,7 +34,7 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchPath strin
 			fmt.Println(branchPath, "找到解")
 		}
 		cells := s.cells
-		return []*[9][9]int{&cells}
+		return []*[9][9]int8{&cells}
 	}
 
 	//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
@@ -51,18 +51,18 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchPath strin
 		}
 	}
 	sort.Slice(try.Nums, func(i, j int) bool {
-		return s.CompareNumInCell(try.RowCol, try.Nums[i], try.Nums[j])
+		return s.CompareNumInCell(try.RowCol, int(try.Nums[i]), int(try.Nums[j]))
 	})
 
-	result := make([]*[9][9]int, 0)
+	result := make([]*[9][9]int8, 0)
 	for _, n := range try.Nums {
 		s2 := s.Copy()
 		t = NewTrigger()
-		s2.Set(t, RCN(try.Row, try.Col, n))
+		s2.Set(t, RowColNum{RowCol: try.RowCol, Num: n})
 		ctx.evalCount++
 		ctx.guessesCount++
 		if !*flagShowOnlyResult {
-			s2.Show("在可能的选项里猜一个", try.Row, try.Col)
+			s2.Show("在可能的选项里猜一个", int(try.Row), int(try.Col))
 		}
 		subResult := ctx.recurseEval(s2, t, path.Join(branchPath,
 			fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), try.Row+1, try.Col+1, n+1)))
@@ -123,7 +123,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 					if blockExcludes == 8 {
 						title += fmt.Sprintf("该宫唯一可以填 %d 的位置\n", rcn.Num+1)
 					}
-					s.Show(strings.TrimSuffix(title, "\n"), rcn.Row, rcn.Col)
+					s.Show(strings.TrimSuffix(title, "\n"), int(rcn.Row), int(rcn.Col))
 				}
 			}
 			if !checkConflicts(next) {
