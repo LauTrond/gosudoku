@@ -279,7 +279,8 @@ func (s *Situation) CompareNumInCell(rc RowCol, n1, n2 int) bool {
 		return score1 > score2
 	}
 	base := rc.Row * 4 + rc.Col * 7
-	return (base + n1) % 9 < (base + n2) % 9}
+	return (base + n1) % 9 < (base + n2) % 9
+}
 
 func ShowCells(cells *[9][9]int, title string, r, c int) {
 	fmt.Println("=============================")
