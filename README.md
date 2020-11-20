@@ -1,6 +1,6 @@
 # sudoku 数独解题
 
-毫秒级的数独解题，还能显示每一步的推断。
+微秒级的数独解题，还能显示每一步的推断。
 
 这个项目的重点是研究数独高效解题方法。
 
@@ -90,8 +90,8 @@
     $ go run . -h
 
 使用 -b 参数可以显示运算耗时（不包含程序启动、输入输出时间）。
-一般难度谜题，如17线索的 puzzles/simple-1.txt 可以在0.1毫秒内完成。
-puzzles/hard-02.txt 是 Google 找到的号称"最难的数独"，本项目找到唯一解的耗时约1毫秒：
+一般难度谜题，如17线索的 puzzles/simple-1.txt 可以在100微妙内完成。
+puzzles/hard-02.txt 是某个新闻号称"最难的数独"，本项目找到唯一解的耗时约1毫秒：
 
     $ cd $GOPATH/src/github.com/LauTrond/sudoku
     $ cat puzzles/hard-02.txt
@@ -124,6 +124,12 @@ puzzles/hard-02.txt 是 Google 找到的号称"最难的数独"，本项目找�
     
     总耗时：1.106528ms
     总推演次数：251
+
+但对于下面这些题都是小儿科。文件 hardest_test.go 内包含一个高难数独题集合 "HardestDatabase110626"，全部375题耗时不足2秒：
+
+    $ go test . -v -count=1 Hardest
+
+最难的一道题耗时 40 毫秒进行了 13891 次推理才找到唯一的解。
 
 ## 如何做到 ##
 

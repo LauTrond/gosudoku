@@ -29,7 +29,7 @@ func TestBranch(t *testing.T) {
 
 	choices := s.Choices()
 	sort.Slice(choices, func(i, j int) bool {
-		return compareGuestItem(choices[i], choices[j])
+		return s.CompareGuestItem(choices[i], choices[j])
 	})
 	for d, try := range choices {
 		for i, n := range try.Nums {

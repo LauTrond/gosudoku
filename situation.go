@@ -51,15 +51,10 @@ type Situation struct {
 }
 
 // 初始化一个数独谜题
-// puzzle 是一个9行的字符串（前后空行会自动去除），以空格和数字代表单元格
+// puzzle 是一个9行的字符串（前后空行会自动去除），以点和数字代表单元格
 // 其中空格代表未填入的单元格
 func ParseSituation(puzzle string) (*Situation, *Trigger) {
-	var s Situation
-	for r := range loop9 {
-		for c := range loop9 {
-			s.cells[r][c] = -1
-		}
-	}
+	s := newSituation()
 	lines := strings.Split(strings.Trim(puzzle, "\n"), "\n")
 	t := &Trigger{}
 	for r, line := range lines {
@@ -72,7 +67,34 @@ func ParseSituation(puzzle string) (*Situation, *Trigger) {
 			}
 		}
 	}
-	return &s, t
+	return s, t
+}
+
+// 初始化一个数独谜题，不换行的81个字符
+//
+func ParseSituationFromLine(line string) (*Situation, *Trigger) {
+	if len(line) != 81 {
+		panic("invalid puzzle from line")
+	}
+
+	s := newSituation()
+	t := &Trigger{}
+	for i, n := range line {
+		if n >= '1' && n <= '9' {
+			s.Set(t, RCN(i/9, i%9, int(n-'1')))
+		}
+	}
+	return s, t
+}
+
+func newSituation() *Situation {
+	var s Situation
+	for r := range loop9 {
+		for c := range loop9 {
+			s.cells[r][c] = -1
+		}
+	}
+	return &s
 }
 
 func (s *Situation) Copy() *Situation {
@@ -182,20 +204,6 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	}
 
 	return true
-}
-
-func (s *Situation) ExcludeByRules(t *Trigger) {
-	//占位排除法（列）
-	s.ApplyRuleMultiStandCol(t)
-
-	//占位排除法（行）
-	s.ApplyRuleMultiStandRow(t)
-
-	//X-Wing（行）
-	s.ApplyRuleXWingRow(t)
-
-	//X-Wing（列）
-	s.ApplyRuleXWingCol(t)
 }
 
 // 获取当前无法排除的所有填充选项。

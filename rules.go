@@ -6,7 +6,7 @@ import "fmt"
 
 === 互斥组 ===
 
-同一行、或同一列、或同一区块。
+同一行、或同一列、或同一宫。
 
 === 占位排除法 ===
 
@@ -27,11 +27,25 @@ import "fmt"
          9  |     3      |         5
             | 5   4      |     6
 
-留意右上区块，根据其他行列排除法，标记"#"的单元格都不能是 6，所以 6 必定在同一区块剩余的两个单元格中。
+留意右上宫，根据其他行列排除法，标记"#"的单元格都不能是 6，所以 6 必定在同一宫剩余的两个单元格中。
 刚好这两个选项同在另外一个互斥体（第 3 行），所以第 3 行其他单元格都不能是 6。
 标记 "*" 的单元格因此排除6，你没有其他简单的方法可以作出这个断言。
 
 */
+
+func (s *Situation) ExcludeByRules(t *Trigger) {
+	//占位排除法（列）
+	s.ApplyRuleMultiStandCol(t)
+
+	//占位排除法（行）
+	s.ApplyRuleMultiStandRow(t)
+
+	//X-Wing（行）
+	//s.ApplyRuleXWingRow(t)
+
+	//X-Wing（列）
+	//s.ApplyRuleXWingCol(t)
+}
 
 func (s *Situation) ApplyRuleMultiStandCol(t *Trigger) {
 	for n := range loop9 {
