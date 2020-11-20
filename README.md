@@ -129,7 +129,8 @@ puzzles/hard-02.txt 是某个新闻号称"最难的数独"，本项目找到唯�
 
     $ go test . -v -count=1 -test.run Hardest
 
-17线索题集性能测试：
+参加一项[比赛](https://codegolf.stackexchange.com/questions/190727/the-fastest-sudoku-solver)，
+求解49151道17线索的题，使用多线程，成绩1秒（最快纪录是 Tdoku C++ 0.2秒）：
 
     $ go test . -v -count=1 -test.run 17Clue
 
