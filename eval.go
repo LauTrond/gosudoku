@@ -10,6 +10,7 @@ import (
 type SudokuContext struct {
 	evalCount int
 	guessesCount int
+	results []*[9][9]int8
 }
 
 func newSudokuContext() *SudokuContext {
@@ -18,32 +19,30 @@ func newSudokuContext() *SudokuContext {
 
 // recurseEval 开始推断局势 s，并返回所有可能的终局。
 // 如果返回nil，表示这个局势有矛盾，不存在正确的解答。
-func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchPath string) []*[9][9]int8 {
+func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName string) int {
 	if *flagShowBranch {
-		fmt.Println(branchPath, "开始")
+		fmt.Println(branchName, "开始")
 	}
 	if !ctx.logicalEval(s, t) {
 		if *flagShowBranch {
-			fmt.Println(branchPath, fmt.Sprintf("演算到 <%d> 发生矛盾", s.Count()))
+			fmt.Println(branchName, fmt.Sprintf("演算到 <%d> 发生矛盾", s.Count()))
 		}
-		return nil
+		return 0
 	}
 
 	if s.Completed() {
 		if *flagShowBranch {
-			fmt.Println(branchPath, "找到解")
+			fmt.Println(branchName, "找到解")
 		}
 		cells := s.cells
-		return []*[9][9]int8{&cells}
+		ctx.results = append(ctx.results, &cells)
+		return 1
 	}
 
 	//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
 
 	//获取所有可能的选项
 	choices := s.Choices()
-	if len(choices) == 0 {
-		return nil
-	}
 	try := choices[0]
 	for _, c := range choices {
 		if s.CompareGuestItem(c, try) {
@@ -54,7 +53,7 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchPath strin
 		return s.CompareNumInCell(try.RowCol, int(try.Nums[i]), int(try.Nums[j]))
 	})
 
-	result := make([]*[9][9]int8, 0)
+	var count int
 	for _, n := range try.Nums {
 		s2 := s.Copy()
 		t = NewTrigger()
@@ -64,22 +63,26 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchPath strin
 		if !*flagShowOnlyResult {
 			s2.Show("在可能的选项里猜一个", int(try.Row), int(try.Col))
 		}
-		subResult := ctx.recurseEval(s2, t, path.Join(branchPath,
-			fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), try.Row+1, try.Col+1, n+1)))
+		name := ""
+		if *flagShowBranch {
+			name = path.Join(branchName,
+				fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), try.Row+1, try.Col+1, n+1))
+		}
+		count += ctx.recurseEval(s2, t, name)
+		t.Release()
 		s2.Release()
-		result = append(result, subResult...)
-		if len(result) > 0 && *flagShowStopAtFirst {
+		if count > 0 && *flagShowStopAtFirst {
 			break
 		}
 	}
 	if *flagShowBranch {
 		txt := "无解"
-		if len(result) > 0 {
-			txt = fmt.Sprintf("%d 个解", len(result))
+		if count > 0 {
+			txt = fmt.Sprintf("%d 个解", count)
 		}
-		fmt.Println(branchPath, txt)
+		fmt.Println(branchName, txt)
 	}
-	return result
+	return count
 }
 
 // logicalEval 开始推断局势 s，直到没有找到确定的填充选项，不确保全部完成。

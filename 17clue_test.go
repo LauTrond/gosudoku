@@ -1,76 +1,84 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
-	"io/ioutil"
+	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"strconv"
-	"sync"
+	"strings"
 	"testing"
 )
 
 //这是一个比赛：
 //https://codegolf.stackexchange.com/questions/190727/the-fastest-sudoku-solver
 
+const inputFile = "assests/all_17_clue_sudokus.txt"
+const outputFile = "assests/17clude_result.txt"
+
 func Test17Clue(t *testing.T) {
+	check := func(err error) {
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	*flagShowOnlyResult = true
 	*flagShowStopAtFirst = true
 
 	parallel := 8
 	throttle := make(chan struct{}, parallel)
 	runtime.GOMAXPROCS(parallel)
-	var wg sync.WaitGroup
 
-	raw, err := ioutil.ReadFile("assests/all_17_clue_sudokus.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := bytes.Split(raw, []byte("\n"))
+	input, err := os.Open(inputFile); check(err)
+	defer input.Close()
+	br := bufio.NewReader(input)
+	firstLine, err := br.ReadString('\n'); check(err)
+	total, err := strconv.Atoi(strings.TrimSuffix(firstLine,"\n")); check(err)
 
-	linesNum, err := strconv.Atoi(string(lines[0]))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for i := range lines[1:linesNum+1] {
-		linePtr := &lines[1+i]
+	outputLines := make([]chan []byte, total)
+	for i := 0; i < total; i++ {
+		c := make(chan []byte, 1)
+		outputLines[i] = c
+		line, err := br.ReadBytes('\n')
+		if err != io.EOF {
+			check(err)
+		}
 		throttle<-struct{}{}
-		wg.Add(1)
 		go func() {
-			s, trg := ParseSituationFromLine(*linePtr)
-			ctx := newSudokuContext()
-			result := ctx.recurseEval(s, trg, "/")
-			if len(result) != 1 {
-				t.Fatal("unsolved:" + string(*linePtr))
-			}
-			s.Release()
-			resultSerial := make([]byte, 81)
-			for j := range resultSerial {
-				resultSerial[j] = byte(result[0][j/9][j%9]) + '1'
-			}
-			*linePtr = append(*linePtr, ',')
-			*linePtr = append(*linePtr, resultSerial...)
+			defer func(){<-throttle}()
 
-			wg.Done()
-			<-throttle
+			line = bytes.TrimSuffix(line,[]byte("\n"))
+			s, trg := ParseSituationFromLine(line)
+			ctx := newSudokuContext()
+			ctx.recurseEval(s, trg, "/")
+			if len(ctx.results) != 1 {
+				t.Error("unsolved:" + string(line))
+				return
+			}
+			result := ctx.results[0]
+			trg.Release()
+			s.Release()
+
+			outline := make([]byte, 81 + 1 + 81 + 1)
+			copy(outline[0:81], line)
+			outline[81] = ','
+			for r := range loop9 {
+				for c := range loop9 {
+					outline[82 + r*9 + c] = byte(result[r][c]) + '1'
+				}
+			}
+			outline[81 + 1 + 81] = '\n'
+			c<-outline
 		}()
 	}
-	wg.Wait()
 
-	f, err := os.Create("assests/17clude_result.txt")
-	if err != nil {
-		t.Fatal(err)
+	output, err := os.Create(outputFile); check(err)
+	defer output.Close()
+	_, err = fmt.Fprintln(output, total); check(err)
+	for _, c := range outputLines {
+		_, err = output.Write(<-c); check(err)
 	}
-	for _, line := range lines[:linesNum+1] {
-		_, err = f.Write(line)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = f.Write([]byte{'\n'})
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	f.Close()
 }

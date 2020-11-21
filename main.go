@@ -45,12 +45,12 @@ func main() {
 
 	startTime := time.Now()
 	ctx := newSudokuContext()
-	result := ctx.recurseEval(s, t, "/")
+	count := ctx.recurseEval(s, t, "/")
 	dur := time.Since(startTime)
-	if len(result) > 0 {
-		fmt.Printf("\n找到了 %d 个解\n", len(result))
-		for i, answer := range result {
-			ShowCells(answer, fmt.Sprintf("result %d", i), -1, -1)
+	if count > 0 {
+		fmt.Printf("\n找到了 %d 个解\n", count)
+		for i, answer := range ctx.results {
+			ShowCells(answer, fmt.Sprintf("解 %d", i+1), -1, -1)
 		}
 	} else {
 		s.Show("失败", -1, -1)

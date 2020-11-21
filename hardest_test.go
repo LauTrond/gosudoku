@@ -23,21 +23,22 @@ func TestHardest(t *testing.T) {
 		count++
 
 		lineStartTime := time.Now()
-		s, t := ParseSituationFromLine(puzzle)
+		s, trg := ParseSituationFromLine(puzzle)
 		ctx := newSudokuContext()
-		result := ctx.recurseEval(s, t, "/")
+		ctx.recurseEval(s, trg, "/")
 		s.Release()
+		trg.Release()
 		dur := time.Since(lineStartTime)
 
-		if len(result) == 0 {
-			fmt.Println("failed")
+		if len(ctx.results) == 0 {
+			t.Error("failed", puzzle)
 		} else {
 			resultBytes := make([]byte, 81)
 			for i := range resultBytes {
-				resultBytes[i] = byte('1' + result[0][i/9][i%9])
+				resultBytes[i] = byte('1' + ctx.results[0][i/9][i%9])
 			}
 			fmt.Printf("(results=%d, guesses=%d, eval=%d，dur=%v) %s\n",
-				len(result), ctx.guessesCount, ctx.evalCount, dur, string(resultBytes))
+				len(ctx.results), ctx.guessesCount, ctx.evalCount, dur, string(resultBytes))
 		}
 	}
 	fmt.Printf("总局数：%d\n总耗时：%v\n", count, time.Since(startTime))
