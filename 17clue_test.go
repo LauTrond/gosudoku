@@ -63,7 +63,6 @@ func Test17Clue(t *testing.T) {
 				return
 			}
 			result := ctx.results[0]
-			trg.Release()
 			s.Release()
 
 			outline := make([]byte, 81 + 1 + 81 + 1)

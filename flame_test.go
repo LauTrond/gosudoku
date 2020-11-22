@@ -28,7 +28,6 @@ func TestFlame(t *testing.T) {
 			ctx := newSudokuContext()
 			ctx.Run(s, trg)
 			s.Release()
-			trg.Release()
 		}
 	}
 }

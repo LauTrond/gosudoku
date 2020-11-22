@@ -95,7 +95,6 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 				fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), try.Row+1, try.Col+1, n+1))
 		}
 		count += ctx.recurseEval(s2, t, name)
-		t.Release()
 		s2.Release()
 		if count > 0 && *flagShowStopAtFirst {
 			break

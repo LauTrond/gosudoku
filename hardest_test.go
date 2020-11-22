@@ -29,7 +29,6 @@ func TestHardest(t *testing.T) {
 		ctx.Run(s, trg)
 		guessesCount += ctx.guessesCount
 		s.Release()
-		trg.Release()
 		dur := time.Since(lineStartTime)
 
 		if len(ctx.results) == 0 {

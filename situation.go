@@ -442,14 +442,7 @@ func (rcn RowColNum) Extract() (r, c, n int) {
 	return int(rcn.Row), int(rcn.Col), int(rcn.Num)
 }
 
-var triggerPool = sync.Pool{
-	New: func() interface{} {
-		return new(Trigger)
-	},
-}
-
 type Trigger struct {
-	_confirms [32]RowColNum
 	Confirms  []RowColNum
 	Conflicts []string
 }
@@ -457,9 +450,9 @@ type Trigger struct {
 var zeroConfirms [32]RowColNum
 
 func NewTrigger() *Trigger {
-	t := triggerPool.Get().(*Trigger)
-	t.Confirms = t._confirms[0:0]
-	t.Conflicts = nil
+	t := &Trigger{
+		Confirms: make([]RowColNum, 0, 32),
+	}
 	return t
 }
 
@@ -475,10 +468,6 @@ func (t *Trigger) Conflict(msg string) {
 		return
 	}
 	t.Conflicts = append(t.Conflicts, msg)
-}
-
-func (t *Trigger) Release() {
-	triggerPool.Put(t)
 }
 
 type GuessItem struct {
