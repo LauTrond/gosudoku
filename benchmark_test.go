@@ -6,20 +6,21 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
 func Test17Clue(t *testing.T) {
-	RunSingleThread(t, "assets/17_clue.txt", "assets/17_clue_result.txt")
+	RunSingleThread(t, "assets/17_clue.txt", "output/17_clue.txt")
 }
 
 func TestHardest1106(t *testing.T) {
-	RunSingleThread(t, "assets/hardest_1106.txt", "assets/hardest_1106_result.txt")
+	RunSingleThread(t, "assets/hardest_1106.txt", "output/hardest_1106.txt")
 }
 
 func TestHardest1905_11(t *testing.T) {
-	RunSingleThread(t, "assets/hardest_1905_11.txt", "assets/hardest_1905_11_result.txt")
+	RunSingleThread(t, "assets/hardest_1905_11.txt", "output/hardest_1905_11.txt")
 }
 
 func RunSingleThread(t *testing.T, inputFile, outputFile string) {
@@ -36,6 +37,7 @@ func RunSingleThread(t *testing.T, inputFile, outputFile string) {
 	defer input.Close()
 	br := bufio.NewReader(input)
 
+	err = os.MkdirAll(filepath.Dir(outputFile), 0755); check(err)
 	output, err := os.Create(outputFile); check(err)
 	defer output.Close()
 

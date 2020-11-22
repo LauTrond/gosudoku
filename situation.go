@@ -206,7 +206,11 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		}
 		t.Confirm(RCN(r, c, n1))
 	case 9:
-		t.Conflict(fmt.Sprintf("单元格(%d,%d)没有可填充数字", r+1, c+1))
+		reason := ""
+		if !*flagShowOnlyResult {
+			reason = fmt.Sprintf("单元格(%d,%d)没有可填充数字", r+1, c+1)
+		}
+		t.Conflict(reason)
 	}
 
 	switch rowExcludes {
@@ -217,7 +221,11 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		}
 		t.Confirm(RCN(r, c1, n))
 	case 9:
-		t.Conflict(fmt.Sprintf("第 %d 行没有单元格可填充 %d", r+1, n+1))
+		reason := ""
+		if !*flagShowOnlyResult {
+			reason = fmt.Sprintf("第 %d 行没有单元格可填充 %d", r+1, n+1)
+		}
+		t.Conflict(reason)
 	default:
 		for _, C0 := range loop3skip[C] {
 			C1 := 3 - C - C0
@@ -239,7 +247,11 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		}
 		t.Confirm(RCN(r1, c, n))
 	case 9:
-		t.Conflict(fmt.Sprintf("第 %d 列没有单元格可填充 %d", c+1, n+1))
+		reason := ""
+		if !*flagShowOnlyResult {
+			reason = fmt.Sprintf("第 %d 列没有单元格可填充 %d", c+1, n+1)
+		}
+		t.Conflict(reason)
 	default:
 		for _, R0 := range loop3skip[R] {
 			R1 := 3 - R - R0
@@ -266,7 +278,11 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		}
 		t.Confirm(RCN(R*3+r1, C*3+c1, n))
 	case 9:
-		t.Conflict(fmt.Sprintf("宫(%d,%d)没有单元格可填充 %d", R+1, C+1, n+1))
+		reason := ""
+		if !*flagShowOnlyResult {
+			reason = fmt.Sprintf("宫(%d,%d)没有单元格可填充 %d", R+1, C+1, n+1)
+		}
+		t.Conflict(reason)
 	default:
 		for _, rr0 := range loop3skip[rr] {
 			if rowSliceExcludes+s.rowSliceExcludes[R*3+rr0][C][n] == 6 {

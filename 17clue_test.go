@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -20,7 +21,7 @@ import (
 //本程序成绩是1秒左右，使用了多线程。无多线程成绩约3秒。
 
 const inputFile = "assets/17_clue.txt"
-const outputFile = "assets/17_clue_result_contest.txt"
+const outputFile = "output/17_clue_contest.txt"
 
 func Test17ClueContest(t *testing.T) {
 	check := func(err error) {
@@ -41,6 +42,10 @@ func Test17ClueContest(t *testing.T) {
 	br := bufio.NewReader(input)
 	firstLine, err := br.ReadString('\n'); check(err)
 	total, err := strconv.Atoi(strings.TrimSuffix(firstLine,"\n")); check(err)
+
+	err = os.MkdirAll(filepath.Dir(outputFile), 0755); check(err)
+	output, err := os.Create(outputFile); check(err)
+	defer output.Close()
 
 	outputLines := make([]chan []byte, total)
 	for i := 0; i < total; i++ {
@@ -78,8 +83,6 @@ func Test17ClueContest(t *testing.T) {
 		}()
 	}
 
-	output, err := os.Create(outputFile); check(err)
-	defer output.Close()
 	_, err = fmt.Fprintln(output, total); check(err)
 	for _, c := range outputLines {
 		_, err = output.Write(<-c); check(err)
