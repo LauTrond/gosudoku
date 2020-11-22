@@ -19,10 +19,10 @@ import (
 //最快纪录是 Tdoku C++ 的 0.2 秒。
 //本程序成绩是1秒左右，使用了多线程。无多线程成绩约3秒。
 
-const inputFile = "assests/all_17_clue_sudokus.txt"
-const outputFile = "assests/17clude_result.txt"
+const inputFile = "assets/17_clue.txt"
+const outputFile = "assets/17_clue_result_contest.txt"
 
-func Test17Clue(t *testing.T) {
+func Test17ClueContest(t *testing.T) {
 	check := func(err error) {
 		if err != nil {
 			panic(err)

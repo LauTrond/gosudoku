@@ -126,12 +126,7 @@ puzzles/hard-02.txt 是某个新闻号称"最难的数独"，本项目找到唯�
 
 文件 hardest_test.go 内包含一个高难数独题集合 "HardestDatabase110626"，本程序解开全部375题耗时0.5秒：
 
-    $ go test . -v -count=1 -test.run Hardest
-
-参加一项[比赛](https://codegolf.stackexchange.com/questions/190727/the-fastest-sudoku-solver) 
-，求解49151道17线索的题，使用多线程，i7 @ 2.6GHz 成绩 0.67 秒（最快纪录是 Tdoku C++ 0.2秒）：
-
-    $ go test . -v -count=1 -test.run 17Clue
+    $ go test . -v -count=1 -test.run Hardest1106
 
 ## 如何做到 ##
 

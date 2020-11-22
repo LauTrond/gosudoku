@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
 	"testing"
@@ -16,8 +17,14 @@ func TestFlame(t *testing.T) {
 	*flagShowOnlyResult = true
 	*flagShowStopAtFirst = true
 
+	hardest, err := ioutil.ReadFile("assets/hardest_1106.txt")
+	if err != nil {
+		panic(err)
+	}
+	lines := bytes.Split(hardest, []byte("\n"))
+
 	for {
-		for _, line := range bytes.Split([]byte(hardest), []byte("\n")) {
+		for _, line := range lines {
 			puzzle := bytes.SplitN(line, []byte(","), 2)[0]
 			if len(puzzle) != 81 {
 				continue
