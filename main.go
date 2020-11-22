@@ -46,7 +46,7 @@ func main() {
 
 	startTime := time.Now()
 	ctx := newSudokuContext()
-	count := ctx.recurseEval(s, t, "/")
+	count := ctx.Run(s, t)
 	dur := time.Since(startTime)
 	if count > 0 {
 		fmt.Printf("\n找到了 %d 个解\n", count)

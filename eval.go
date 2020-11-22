@@ -17,6 +17,17 @@ func newSudokuContext() *SudokuContext {
 	return &SudokuContext{}
 }
 
+func (ctx *SudokuContext) Run(s *Situation, t *Trigger) int {
+	if len(t.Conflicts) > 0 && !*flagShowOnlyResult {
+		fmt.Println("开局矛盾：")
+		for _, msg := range t.Conflicts {
+			fmt.Println(msg)
+		}
+		return 0
+	}
+	return ctx.recurseEval(s, t, "/")
+}
+
 // recurseEval 开始推断局势 s，并返回所有可能的终局。
 // 如果返回nil，表示这个局势有矛盾，不存在正确的解答。
 func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName string) int {
@@ -69,6 +80,15 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 		if !*flagShowOnlyResult {
 			s2.Show("在可能的选项里猜一个", int(try.Row), int(try.Col))
 		}
+		if len(t.Conflicts) > 0 {
+			if !*flagShowOnlyResult {
+				fmt.Println("发生矛盾：")
+				for _, msg := range t.Conflicts {
+					fmt.Println(msg)
+				}
+			}
+			continue
+		}
 		name := ""
 		if *flagShowBranch {
 			name = path.Join(branchName,
@@ -94,30 +114,15 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 // logicalEval 开始推断局势 s，直到没有找到确定的填充选项，不确保全部完成。
 // 如果返回false，表示这个局势有矛盾。
 func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
-	checkConflicts := func(t1 *Trigger) bool {
-		if len(t1.Conflicts) > 0 {
-			if !*flagShowOnlyResult {
-				fmt.Println("发生矛盾：")
-				for _, msg := range t1.Conflicts {
-					fmt.Println(msg)
-				}
-			}
-			return false
-		}
-		return true
-	}
-	if !checkConflicts(t) {
-		return false
-	}
-
 	for len(t.Confirms) > 0 || len(t.Conflicts) > 0 {
-		next := NewTrigger()
-		for _, rcn := range t.Confirms {
+		last := t
+		t = NewTrigger()
+		for _, rcn := range last.Confirms {
 			cellNumExcludes := s.cellNumExcludes[rcn.Row][rcn.Col]
 			rowExcludes := s.rowExcludes[rcn.Row][rcn.Num]
 			colExcludes := s.colExcludes[rcn.Col][rcn.Num]
 			blockExcludes := s.blockExcludes[rcn.Row/3][rcn.Col/3][rcn.Num]
-			if s.Set(next, rcn) {
+			if s.Set(t, rcn) {
 				ctx.evalCount++
 				if !*flagShowOnlyResult {
 					title := ""
@@ -135,12 +140,17 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 					}
 					s.Show(strings.TrimSuffix(title, "\n"), int(rcn.Row), int(rcn.Col))
 				}
-			}
-			if !checkConflicts(next) {
-				return false
+				if len(t.Conflicts) > 0 {
+					if !*flagShowOnlyResult {
+						fmt.Println("发生矛盾：")
+						for _, msg := range t.Conflicts {
+							fmt.Println(msg)
+						}
+					}
+					return false
+				}
 			}
 		}
-		t = next
 	}
 	if s.Completed() && !*flagShowOnlyResult {
 		fmt.Println("找到了一个解")

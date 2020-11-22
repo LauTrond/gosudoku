@@ -57,7 +57,7 @@ func Test17Clue(t *testing.T) {
 			line = bytes.TrimSuffix(line,[]byte("\n"))
 			s, trg := ParseSituationFromLine(line)
 			ctx := newSudokuContext()
-			ctx.recurseEval(s, trg, "/")
+			ctx.Run(s, trg)
 			if len(ctx.results) != 1 {
 				t.Error("unsolved:" + string(line))
 				return

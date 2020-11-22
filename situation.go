@@ -227,6 +227,17 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		t.Confirm(RCN(r, c1, n))
 	case 9:
 		t.Conflict(fmt.Sprintf("第 %d 行没有单元格可填充 %d", r+1, n+1))
+	default:
+		for _, C0 := range loop3skip[C] {
+			C1 := 3 - C - C0
+			if rowSliceExcludes+s.rowSliceExcludes[r][C0][n] == 6 {
+				for _, rr1 := range loop3skip[r-R*3] {
+					for cc1 := range loop3 {
+						s.Exclude(t, RCN(R*3+rr1, C1*3+cc1, n))
+					}
+				}
+			}
+		}
 	}
 
 	switch colExcludes {
@@ -238,6 +249,17 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		t.Confirm(RCN(r1, c, n))
 	case 9:
 		t.Conflict(fmt.Sprintf("第 %d 列没有单元格可填充 %d", c+1, n+1))
+	default:
+		for _, R0 := range loop3skip[R] {
+			R1 := 3 - R - R0
+			if colSliceExcludes+s.colSliceExcludes[R0][c][n] == 6 {
+				for rr1 := range loop3 {
+					for _, cc1 := range loop3skip[c-C*3] {
+						s.Exclude(t, RCN(R1*3+rr1, C*3+cc1, n))
+					}
+				}
+			}
+		}
 	}
 
 	switch blockExcludes {
@@ -254,34 +276,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		t.Confirm(RCN(R*3+r1, C*3+c1, n))
 	case 9:
 		t.Conflict(fmt.Sprintf("宫(%d,%d)没有单元格可填充 %d", R+1, C+1, n+1))
-	}
-
-
-	if rowExcludes <= 7 {
-		for _, C0 := range loop3skip[C] {
-			C1 := 3 - C - C0
-			if rowSliceExcludes+s.rowSliceExcludes[r][C0][n] == 6 {
-				for _, rr1 := range loop3skip[r-R*3] {
-					for cc1 := range loop3 {
-						s.Exclude(t, RCN(R*3+rr1, C1*3+cc1, n))
-					}
-				}
-			}
-		}
-	}
-	if colExcludes <= 7 {
-		for _, R0 := range loop3skip[R] {
-			R1 := 3 - R - R0
-			if colSliceExcludes+s.colSliceExcludes[R0][c][n] == 6 {
-				for rr1 := range loop3 {
-					for _, cc1 := range loop3skip[c-C*3] {
-						s.Exclude(t, RCN(R1*3+rr1, C*3+cc1, n))
-					}
-				}
-			}
-		}
-	}
-	if blockExcludes <= 7 {
+	default:
 		for _, rr0 := range loop3skip[rr] {
 			if rowSliceExcludes+s.rowSliceExcludes[R*3+rr0][C][n] == 6 {
 				for _, c0 := range loop9skip[C] {
@@ -314,6 +309,7 @@ func (s *Situation) Choices(cnt int) []*GuessItem {
 
 			item := &GuessItem{
 				RowCol: RowCol{int8(r),int8(c)},
+				Nums: make([]int8, 0, 4),
 			}
 			for n := range loop9 {
 				if s.cellExclude[r][c][n] == 0 {

@@ -26,7 +26,7 @@ func TestHardest(t *testing.T) {
 		lineStartTime := time.Now()
 		s, trg := ParseSituationFromLine(puzzle)
 		ctx := newSudokuContext()
-		ctx.recurseEval(s, trg, "/")
+		ctx.Run(s, trg)
 		guessesCount += ctx.guessesCount
 		s.Release()
 		trg.Release()
