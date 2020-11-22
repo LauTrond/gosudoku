@@ -18,10 +18,12 @@ func newSudokuContext() *SudokuContext {
 }
 
 func (ctx *SudokuContext) Run(s *Situation, t *Trigger) int {
-	if len(t.Conflicts) > 0 && !*flagShowOnlyResult {
-		fmt.Println("开局矛盾：")
-		for _, msg := range t.Conflicts {
-			fmt.Println(msg)
+	if len(t.Conflicts) > 0 {
+		if !*flagShowOnlyResult {
+			fmt.Println("开局矛盾：")
+			for _, msg := range t.Conflicts {
+				fmt.Println(msg)
+			}
 		}
 		return 0
 	}
