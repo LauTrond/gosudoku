@@ -57,7 +57,8 @@ func main() {
 		s.Show("失败", -1, -1)
 	}
 	if *flagShowStat {
-		fmt.Printf("\n总耗时：%v\n总推演次数：%d\n", dur, ctx.evalCount)
+		fmt.Printf("总耗时：%v\n", dur)
+		fmt.Printf("总猜次数：%d\n", ctx.guessesCount)
 	}
 }
 
