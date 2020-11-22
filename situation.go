@@ -66,13 +66,6 @@ type Situation struct {
 
 	//分支代数，每执行一次Copy就加1
 	branchGeneration int
-
-	initFinished bool
-
-	//上次应用占位排除的setCount
-	//lastAppliedMultiStandAt int
-
-	//lastAppliedXWingAt int
 }
 
 // 初始化一个数独谜题
@@ -92,7 +85,6 @@ func ParseSituation(puzzle string) (*Situation, *Trigger) {
 			}
 		}
 	}
-	s.initFinished = true
 	return s, t
 }
 
@@ -109,7 +101,6 @@ func ParseSituationFromLine(line []byte) (*Situation, *Trigger) {
 			s.Set(t, RCN(i/9, i%9, int(n-'1')))
 		}
 	}
-	s.initFinished = true
 	return s, t
 }
 
@@ -446,8 +437,6 @@ type Trigger struct {
 	Confirms  []RowColNum
 	Conflicts []string
 }
-
-var zeroConfirms [32]RowColNum
 
 func NewTrigger() *Trigger {
 	t := &Trigger{
