@@ -42,7 +42,13 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 	//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
 
 	//获取所有可能的选项
-	choices := s.Choices()
+	var choices []*GuessItem
+	for i := 2 ; i <= 9 ; i++ {
+		choices = s.Choices(i)
+		if len(choices) > 0 {
+			break
+		}
+	}
 	try := choices[0]
 	for _, c := range choices {
 		if s.CompareGuestItem(c, try) {
@@ -103,6 +109,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 	if !checkConflicts(t) {
 		return false
 	}
+
 	for len(t.Confirms) > 0 || len(t.Conflicts) > 0 {
 		next := NewTrigger()
 		for _, rcn := range t.Confirms {
@@ -132,9 +139,6 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 			if !checkConflicts(next) {
 				return false
 			}
-		}
-		if !s.Completed() && len(next.Confirms) == 0 {
-			s.ExcludeByRules(next)
 		}
 		t = next
 	}

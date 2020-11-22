@@ -27,28 +27,52 @@ type Situation struct {
 	//n == -1 : 单元格(r,c) 还没填入数字
 	cells [9][9]int8
 
-	//cellExclude[r][c][n] = 1 表示单元格(r,c)排除n
+	//已填单元格总数
+	setCount int
+
+	//numSetCount[n] = x ： n 已填充 x 次
+	numSetCount [9]int8
+
+	//cellExclude[r][c][n] = 1 ： 单元格(r,c)排除n
 	cellExclude [9][9][9]int8
 
-	//numExcludes[n] 表示 n 的总排除次数
+	//numExcludes[n] ： n 的总排除次数
 	numExcludes [9]int8
 
-	//cellNumExcludes[r][c] = x 表示 r 行 c 列 排除了 x 个数
+	//cellNumExcludes[r][c] = x ： r 行 c 列 排除了 x 个数
 	//等于 sum(cellExclude[r][c][...])
 	cellNumExcludes [9][9]int8
 
-	//rowExcludes[r][n] = x 表示第 r 行的 n 排除了 x 个单元格
+	//rowExcludes[r][n] = x ： r 行的 n 排除了 x 个单元格
 	//等于 sum(cellExclude[r][...][n])
 	rowExcludes [9][9]int8
 
-	//colExcludes[c][n] = x 表示第 c 列的 n 排除了 x 个单元格
-	//等于 sum(cellExclude[...][c][n])
+	//rowExcludes[r][C][n] = x ： 第 r 行 C 宫的 n 排除了 x 个单元格
+	//rowExcludes[r][C][n] = sum(cellExclude[r][C*3..C*3+2][n])
+	rowSliceExcludes [9][3][9]int8
+
+	//colExcludes[c][n] = x ：c 列的 n 排除了 x 个单元格
+	//colExcludes[c][n] = sum(cellExclude[...][c][n])
 	colExcludes [9][9]int8
 
-	//blockExcludes[R][C][n] = x 表示宫 (R,C) 的 n 排除了 x 个单元格
+	//colSliceExcludes[R][c][n] = x ： c 列 R 宫的 n 排除了 x 个单元格
+	//colSliceExcludes[R][c][n] = sum(cellExclude[R*3..R*3+2][c][n])
+	colSliceExcludes [3][9][9]int8
+
+	//blockExcludes[R][C][n] = x ：宫 (R,C) 的 n 排除了 x 个单元格
 	blockExcludes [3][3][9]int8
 
-	setCount int
+	//以下是策略排除可能用到的参数
+
+	//分支代数，每执行一次Copy就加1
+	branchGeneration int
+
+	initFinished bool
+
+	//上次应用占位排除的setCount
+	//lastAppliedMultiStandAt int
+
+	//lastAppliedXWingAt int
 }
 
 // 初始化一个数独谜题
@@ -68,11 +92,11 @@ func ParseSituation(puzzle string) (*Situation, *Trigger) {
 			}
 		}
 	}
+	s.initFinished = true
 	return s, t
 }
 
 // 初始化一个数独谜题，不换行的81个字符
-//
 func ParseSituationFromLine(line []byte) (*Situation, *Trigger) {
 	if len(line) != 81 {
 		panic("invalid puzzle from line")
@@ -85,6 +109,7 @@ func ParseSituationFromLine(line []byte) (*Situation, *Trigger) {
 			s.Set(t, RCN(i/9, i%9, int(n-'1')))
 		}
 	}
+	s.initFinished = true
 	return s, t
 }
 
@@ -117,6 +142,7 @@ func (s *Situation) Release() {
 func (s *Situation) Copy() *Situation {
 	s2 := situationPool.Get().(*Situation)
 	*s2 = *s
+	s2.branchGeneration++
 	return s2
 }
 
@@ -124,14 +150,14 @@ func (s *Situation) Count() int {
 	return s.setCount
 }
 
-//r 行 c 列填入 n
-//同时会执行同一互斥组的排除（修改 s.cellExclude）
+//填数
 func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	r, c, n := rcn.Extract()
 	if s.cells[r][c] != -1 {
 		return false
 	}
 	s.setCount++
+	s.numSetCount[n]++
 	s.cells[r][c] = int8(n)
 
 	for n0 := range loop9 {
@@ -151,12 +177,12 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	}
 	R := r / 3
 	C := c / 3
-	for r0 := range loop3 {
-		for c0 := range loop3 {
-			rr := R*3 + r0
-			cc := C*3 + c0
-			if rr != r || cc != c {
-				s.Exclude(t, RCN(rr, cc, n))
+	for rr0 := range loop3 {
+		for cc0 := range loop3 {
+			r0 := R*3 + rr0
+			c0 := C*3 + cc0
+			if r0 != r || c0 != c {
+				s.Exclude(t, RCN(r0, c0, n))
 			}
 		}
 	}
@@ -166,13 +192,22 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 
 func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	r, c, n := rcn.Extract()
+	R, C := r/3, c/3
+	rr, cc := r-R*3, c-C*3
 	if s.cellExclude[r][c][n] != 0 {
 		return false
 	}
 	s.cellExclude[r][c][n] = 1
-	s.numExcludes[n]++
 
-	switch add(&s.cellNumExcludes[r][c], 1) {
+	_ = add(&s.numExcludes[n], 1)
+	cellNumExcludes := add(&s.cellNumExcludes[r][c], 1)
+	rowExcludes := add(&s.rowExcludes[r][n], 1)
+	colExcludes := add(&s.colExcludes[c][n], 1)
+	blockExcludes := add(&s.blockExcludes[R][C][n], 1)
+	rowSliceExcludes := add(&s.rowSliceExcludes[r][C][n], 1)
+	colSliceExcludes := add(&s.colSliceExcludes[R][c][n], 1)
+
+	switch cellNumExcludes {
 	case 8:
 		n1 := 0
 		for n0 := range loop9 {
@@ -183,7 +218,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		t.Conflict(fmt.Sprintf("单元格(%d,%d)没有可填充数字", r+1, c+1))
 	}
 
-	switch add(&s.rowExcludes[r][n], 1) {
+	switch rowExcludes {
 	case 8:
 		c1 := 0
 		for c0 := range loop9 {
@@ -194,7 +229,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		t.Conflict(fmt.Sprintf("第 %d 行没有单元格可填充 %d", r+1, n+1))
 	}
 
-	switch add(&s.colExcludes[c][n], 1) {
+	switch colExcludes {
 	case 8:
 		r1 := 0
 		for r0 := range loop9 {
@@ -205,7 +240,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		t.Conflict(fmt.Sprintf("第 %d 列没有单元格可填充 %d", c+1, n+1))
 	}
 
-	switch R,C := r/3,c/3; add(&s.blockExcludes[R][C][n], 1) {
+	switch blockExcludes {
 	case 8:
 		r1 := 0
 		c1 := 0
@@ -221,33 +256,72 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		t.Conflict(fmt.Sprintf("宫(%d,%d)没有单元格可填充 %d", R+1, C+1, n+1))
 	}
 
-	return true
-}
 
-// 获取当前无法排除的所有填充选项。
-func (s *Situation) Choices() []*GuessItem {
-	m := map[RowCol][]int8{}
-	for r := range loop9 {
-		for c := range loop9 {
-			if s.cells[r][c] >= 0 {
-				continue
+	if rowExcludes <= 7 {
+		for _, C0 := range loop3skip[C] {
+			C1 := 3 - C - C0
+			if rowSliceExcludes+s.rowSliceExcludes[r][C0][n] == 6 {
+				for _, rr1 := range loop3skip[r-R*3] {
+					for cc1 := range loop3 {
+						s.Exclude(t, RCN(R*3+rr1, C1*3+cc1, n))
+					}
+				}
 			}
-
-			cell := RowCol{int8(r), int8(c)}
-			for n := range loop9 {
-				if s.cellExclude[r][c][n] == 0 {
-					m[cell] = append(m[cell], int8(n))
+		}
+	}
+	if colExcludes <= 7 {
+		for _, R0 := range loop3skip[R] {
+			R1 := 3 - R - R0
+			if colSliceExcludes+s.colSliceExcludes[R0][c][n] == 6 {
+				for rr1 := range loop3 {
+					for _, cc1 := range loop3skip[c-C*3] {
+						s.Exclude(t, RCN(R1*3+rr1, C*3+cc1, n))
+					}
+				}
+			}
+		}
+	}
+	if blockExcludes <= 7 {
+		for _, rr0 := range loop3skip[rr] {
+			if rowSliceExcludes+s.rowSliceExcludes[R*3+rr0][C][n] == 6 {
+				for _, c0 := range loop9skip[C] {
+					rr1 := 3 - rr - rr0
+					s.Exclude(t, RCN(R*3+rr1, c0, n))
+				}
+			}
+		}
+		for _, cc0 := range loop3skip[cc] {
+			if colSliceExcludes+s.colSliceExcludes[R][C*3+cc0][n] == 6 {
+				for _, r0 := range loop9skip[R] {
+					cc1 := 3 - cc - cc0
+					s.Exclude(t, RCN(r0, C*3+cc1, n))
 				}
 			}
 		}
 	}
 
-	result := make([]*GuessItem, 0, 32)
-	for rc, nums := range m {
-		result = append(result, &GuessItem{
-			RowCol: rc,
-			Nums:   nums,
-		})
+	return true
+}
+
+// 获取当前无法排除的所有填充选项。
+func (s *Situation) Choices(cnt int) []*GuessItem {
+	result := make([]*GuessItem,0,8)
+	for r := range loop9 {
+		for c := range loop9 {
+			if int(s.cellNumExcludes[r][c]) != 9 - cnt {
+				continue
+			}
+
+			item := &GuessItem{
+				RowCol: RowCol{int8(r),int8(c)},
+			}
+			for n := range loop9 {
+				if s.cellExclude[r][c][n] == 0 {
+					item.Nums = append(item.Nums, int8(n))
+				}
+			}
+			result = append(result, item)
+		}
 	}
 	return result
 }
@@ -271,13 +345,15 @@ func (s *Situation) CompareGuestItem(c1, c2 *GuessItem) bool {
 	return c1.Hash() < c2.Hash()
 }
 
+//选择哪个号码开始猜测，返回true表示n1比较好
 func (s *Situation) CompareNumInCell(rc RowCol, n1, n2 int) bool {
+	//我也不知道为啥这个指标会有效，只是测试结果表明，这样蒙对的概率更高
 	score1 := int(s.numExcludes[n1])
 	score2 := int(s.numExcludes[n2])
-	//score越高，说明这个数填得多，或占据更关键的位置，选这个数可能更快结束分支演算
 	if score1 != score2 {
-		return score1 > score2
+		return score1 < score2
 	}
+
 	base := int(rc.Row) * 4 + int(rc.Col) * 7
 	return (base + n1) % 9 < (base + n2) % 9
 }
@@ -386,7 +462,6 @@ var zeroConfirms [32]RowColNum
 
 func NewTrigger() *Trigger {
 	t := triggerPool.Get().(*Trigger)
-	copy(t._confirms[:], zeroConfirms[:])
 	t.Confirms = t._confirms[0:0]
 	t.Conflicts = nil
 	return t

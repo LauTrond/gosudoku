@@ -14,6 +14,10 @@ import (
 
 //这是一个比赛：
 //https://codegolf.stackexchange.com/questions/190727/the-fastest-sudoku-solver
+//
+//解49151条17线索题，需要按规定输出文件并使用MD5检验，按耗时记成绩。
+//最快纪录是 Tdoku C++ 的 0.2 秒。
+//本程序成绩是1秒左右，使用了多线程。无多线程成绩约3秒。
 
 const inputFile = "assests/all_17_clue_sudokus.txt"
 const outputFile = "assests/17clude_result.txt"

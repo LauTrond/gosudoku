@@ -14,6 +14,7 @@ func TestHardest(t *testing.T) {
 	*flagShowStopAtFirst = true
 
 	count := 0
+	guessesCount := 0
 	startTime := time.Now()
 	for _, line := range bytes.Split([]byte(hardest), []byte("\n")) {
 		puzzle := bytes.SplitN(line, []byte(","), 2)[0]
@@ -26,6 +27,7 @@ func TestHardest(t *testing.T) {
 		s, trg := ParseSituationFromLine(puzzle)
 		ctx := newSudokuContext()
 		ctx.recurseEval(s, trg, "/")
+		guessesCount += ctx.guessesCount
 		s.Release()
 		trg.Release()
 		dur := time.Since(lineStartTime)
@@ -37,11 +39,13 @@ func TestHardest(t *testing.T) {
 			for i := range resultBytes {
 				resultBytes[i] = byte('1' + ctx.results[0][i/9][i%9])
 			}
-			fmt.Printf("(results=%d, guesses=%d, eval=%d，dur=%v) %s\n",
-				len(ctx.results), ctx.guessesCount, ctx.evalCount, dur, string(resultBytes))
+			fmt.Printf("(results=%d, guesses=%d, eval=%d，dur=%v) %s %s\n",
+				len(ctx.results), ctx.guessesCount, ctx.evalCount, dur, puzzle, string(resultBytes))
 		}
 	}
-	fmt.Printf("总局数：%d\n总耗时：%v\n", count, time.Since(startTime))
+	fmt.Printf("总耗时：%v\n", time.Since(startTime).String())
+	fmt.Printf("总局数：%d\n", count)
+	fmt.Printf("总猜次数：%d\n", guessesCount)
 }
 
 const hardest = `
