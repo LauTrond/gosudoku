@@ -33,34 +33,34 @@ type Situation struct {
 	//numSetCount[n] = x ： n 已填充 x 次
 	numSetCount [9]int8
 
-	//cellExclude[r][c][n] = 1 ： 单元格(r,c)排除n
-	cellExclude [9][9][9]int8
+	//cellExclude[n][r][c] = 1 ： 单元格(r,c)排除n
+	cellExclude [9][9][9]int8  //TODO
 
 	//numExcludes[n] ： n 的总排除次数
 	numExcludes [9]int8
 
 	//cellNumExcludes[r][c] = x ： r 行 c 列 排除了 x 个数
-	//等于 sum(cellExclude[r][c][...])
+	//等于 sum(cellExclude[...][r][c])
 	cellNumExcludes [9][9]int8
 
-	//rowExcludes[r][n] = x ： r 行的 n 排除了 x 个单元格
-	//等于 sum(cellExclude[r][...][n])
-	rowExcludes [9][9]int8
+	//rowExcludes[n][r] = x ： r 行的 n 排除了 x 个单元格
+	//等于 sum(cellExclude[n][r][...])
+	rowExcludes [9][9]int8 //TODO
 
-	//rowExcludes[r][C][n] = x ： 第 r 行 C 宫的 n 排除了 x 个单元格
-	//rowExcludes[r][C][n] = sum(cellExclude[r][C*3..C*3+2][n])
-	rowSliceExcludes [9][3][9]int8
+	//rowExcludes[n][r][C] = x ： 第 r 行 C 宫的 n 排除了 x 个单元格
+	//rowExcludes[n][r][C] = sum(cellExclude[n][r][C*3..C*3+2])
+	rowSliceExcludes [9][9][3]int8 //TODO
 
-	//colExcludes[c][n] = x ：c 列的 n 排除了 x 个单元格
-	//colExcludes[c][n] = sum(cellExclude[...][c][n])
-	colExcludes [9][9]int8
+	//colExcludes[n][c] = x ：c 列的 n 排除了 x 个单元格
+	//colExcludes[n][c] = sum(cellExclude[n][...][c])
+	colExcludes [9][9]int8 //TODO
 
-	//colSliceExcludes[R][c][n] = x ： c 列 R 宫的 n 排除了 x 个单元格
-	//colSliceExcludes[R][c][n] = sum(cellExclude[R*3..R*3+2][c][n])
-	colSliceExcludes [3][9][9]int8
+	//colSliceExcludes[n][R][c] = x ： c 列 R 宫的 n 排除了 x 个单元格
+	//colSliceExcludes[n][R][c] = sum(cellExclude[n][R*3..R*3+2][c])
+	colSliceExcludes [9][3][9]int8 //TODO
 
-	//blockExcludes[R][C][n] = x ：宫 (R,C) 的 n 排除了 x 个单元格
-	blockExcludes [3][3][9]int8
+	//blockExcludes[n][R][C] = x ：宫 (R,C) 的 n 排除了 x 个单元格
+	blockExcludes [9][3][3]int8 //TODO
 
 	//以下是策略排除可能用到的参数
 
@@ -144,6 +144,7 @@ func (s *Situation) Count() int {
 //填数
 func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	r, c, n := rcn.Extract()
+	R, C := r / 3, c/3
 	if s.cells[r][c] != -1 {
 		return false
 	}
@@ -156,18 +157,12 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 			s.Exclude(t, RCN(r, c, n0))
 		}
 	}
-	for r0 := range loop9 {
-		if r0 != r {
-			s.Exclude(t, RCN(r0, c, n))
-		}
+	for _, r0 := range loop9skip[R] {
+		s.Exclude(t, RCN(r0, c, n))
 	}
-	for c0 := range loop9 {
-		if c0 != c {
-			s.Exclude(t, RCN(r, c0, n))
-		}
+	for _, c0 := range loop9skip[C] {
+		s.Exclude(t, RCN(r, c0, n))
 	}
-	R := r / 3
-	C := c / 3
 	for rr0 := range loop3 {
 		for cc0 := range loop3 {
 			r0 := R*3 + rr0
@@ -177,7 +172,6 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 			}
 		}
 	}
-
 	return true
 }
 
@@ -185,24 +179,24 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	r, c, n := rcn.Extract()
 	R, C := r/3, c/3
 	rr, cc := r-R*3, c-C*3
-	if s.cellExclude[r][c][n] != 0 {
+	if s.cellExclude[n][r][c] != 0 {
 		return false
 	}
-	s.cellExclude[r][c][n] = 1
+	s.cellExclude[n][r][c] = 1
 
 	_ = add(&s.numExcludes[n], 1)
 	cellNumExcludes := add(&s.cellNumExcludes[r][c], 1)
-	rowExcludes := add(&s.rowExcludes[r][n], 1)
-	colExcludes := add(&s.colExcludes[c][n], 1)
-	blockExcludes := add(&s.blockExcludes[R][C][n], 1)
-	rowSliceExcludes := add(&s.rowSliceExcludes[r][C][n], 1)
-	colSliceExcludes := add(&s.colSliceExcludes[R][c][n], 1)
+	rowExcludes := add(&s.rowExcludes[n][r], 1)
+	colExcludes := add(&s.colExcludes[n][c], 1)
+	blockExcludes := add(&s.blockExcludes[n][R][C], 1)
+	rowSliceExcludes := add(&s.rowSliceExcludes[n][r][C], 1)
+	colSliceExcludes := add(&s.colSliceExcludes[n][R][c], 1)
 
 	switch cellNumExcludes {
 	case 8:
 		n1 := 0
 		for n0 := range loop9 {
-			n1 += n0 * (1 - int(s.cellExclude[r][c][n0]))
+			n1 += n0 * (1 - int(s.cellExclude[n0][r][c]))
 		}
 		t.Confirm(RCN(r, c, n1))
 	case 9:
@@ -217,7 +211,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	case 8:
 		c1 := 0
 		for c0 := range loop9 {
-			c1 += c0 * (1 - int(s.cellExclude[r][c0][n]))
+			c1 += c0 * (1 - int(s.cellExclude[n][r][c0]))
 		}
 		t.Confirm(RCN(r, c1, n))
 	case 9:
@@ -229,8 +223,8 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	default:
 		for _, C0 := range loop3skip[C] {
 			C1 := 3 - C - C0
-			if rowSliceExcludes+s.rowSliceExcludes[r][C0][n] == 6 {
-				for _, rr1 := range loop3skip[r-R*3] {
+			if rowSliceExcludes+s.rowSliceExcludes[n][r][C0] == 6 {
+				for _, rr1 := range loop3skip[rr] {
 					for cc1 := range loop3 {
 						s.Exclude(t, RCN(R*3+rr1, C1*3+cc1, n))
 					}
@@ -243,7 +237,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	case 8:
 		r1 := 0
 		for r0 := range loop9 {
-			r1 += r0 * (1 - int(s.cellExclude[r0][c][n]))
+			r1 += r0 * (1 - int(s.cellExclude[n][r0][c]))
 		}
 		t.Confirm(RCN(r1, c, n))
 	case 9:
@@ -255,9 +249,9 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	default:
 		for _, R0 := range loop3skip[R] {
 			R1 := 3 - R - R0
-			if colSliceExcludes+s.colSliceExcludes[R0][c][n] == 6 {
+			if colSliceExcludes+s.colSliceExcludes[n][R0][c] == 6 {
 				for rr1 := range loop3 {
-					for _, cc1 := range loop3skip[c-C*3] {
+					for _, cc1 := range loop3skip[cc] {
 						s.Exclude(t, RCN(R1*3+rr1, C*3+cc1, n))
 					}
 				}
@@ -271,7 +265,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		c1 := 0
 		for r0 := range loop3 {
 			for c0 := range loop3 {
-				cellMatched := 1 - int(s.cellExclude[R*3+r0][C*3+c0][n])
+				cellMatched := 1 - int(s.cellExclude[n][R*3+r0][C*3+c0])
 				r1 += r0 * cellMatched
 				c1 += c0 * cellMatched
 			}
@@ -285,7 +279,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		t.Conflict(reason)
 	default:
 		for _, rr0 := range loop3skip[rr] {
-			if rowSliceExcludes+s.rowSliceExcludes[R*3+rr0][C][n] == 6 {
+			if rowSliceExcludes+s.rowSliceExcludes[n][R*3+rr0][C] == 6 {
 				for _, c0 := range loop9skip[C] {
 					rr1 := 3 - rr - rr0
 					s.Exclude(t, RCN(R*3+rr1, c0, n))
@@ -293,7 +287,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 			}
 		}
 		for _, cc0 := range loop3skip[cc] {
-			if colSliceExcludes+s.colSliceExcludes[R][C*3+cc0][n] == 6 {
+			if colSliceExcludes+s.colSliceExcludes[n][R][C*3+cc0] == 6 {
 				for _, r0 := range loop9skip[R] {
 					cc1 := 3 - cc - cc0
 					s.Exclude(t, RCN(r0, C*3+cc1, n))
@@ -319,7 +313,7 @@ func (s *Situation) Choices(cnt int) []*GuessItem {
 				Nums: make([]int8, 0, 4),
 			}
 			for n := range loop9 {
-				if s.cellExclude[r][c][n] == 0 {
+				if s.cellExclude[n][r][c] == 0 {
 					item.Nums = append(item.Nums, int8(n))
 				}
 			}

@@ -63,7 +63,7 @@ func RunSingleThread(t *testing.T, inputFile, outputFile string) {
 		ctx := newSudokuContext()
 		ctx.Run(s, trg)
 		if len(ctx.results) != 1 {
-			t.Error("unsolved:" + string(line))
+			t.Fatal("unsolved:" + string(line))
 		} else {
 			result := ctx.results[0]
 			resultBytes := make([]byte, 82)

@@ -120,9 +120,9 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 		t = NewTrigger()
 		for _, rcn := range last.Confirms {
 			cellNumExcludes := s.cellNumExcludes[rcn.Row][rcn.Col]
-			rowExcludes := s.rowExcludes[rcn.Row][rcn.Num]
-			colExcludes := s.colExcludes[rcn.Col][rcn.Num]
-			blockExcludes := s.blockExcludes[rcn.Row/3][rcn.Col/3][rcn.Num]
+			rowExcludes := s.rowExcludes[rcn.Num][rcn.Row]
+			colExcludes := s.colExcludes[rcn.Num][rcn.Col]
+			blockExcludes := s.blockExcludes[rcn.Num][rcn.Row/3][rcn.Col/3]
 			if s.Set(t, rcn) {
 				ctx.evalCount++
 				if !*flagShowOnlyResult {
