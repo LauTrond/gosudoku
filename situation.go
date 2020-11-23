@@ -196,11 +196,12 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 
 	switch cellNumExcludes {
 	case 8:
-		n1 := 0
 		for n0 := range loop9 {
-			n1 += n0 * (1 - int(s.cellExclude[n0][r][c]))
+			if s.cellExclude[n0][r][c] == 0 {
+				t.Confirm(RCN(r, c, n0))
+				break
+			}
 		}
-		t.Confirm(RCN(r, c, n1))
 	case 9:
 		reason := ""
 		if !*flagShowOnlyResult {
@@ -211,11 +212,12 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 
 	switch rowExcludes {
 	case 8:
-		c1 := 0
 		for c0 := range loop9 {
-			c1 += c0 * (1 - int(s.cellExclude[n][r][c0]))
+			if s.cellExclude[n][r][c0] == 0 {
+				t.Confirm(RCN(r, c0, n))
+				break
+			}
 		}
-		t.Confirm(RCN(r, c1, n))
 	case 9:
 		reason := ""
 		if !*flagShowOnlyResult {
@@ -226,11 +228,12 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 
 	switch colExcludes {
 	case 8:
-		r1 := 0
 		for r0 := range loop9 {
-			r1 += r0 * (1 - int(s.cellExclude[n][r0][c]))
+			if s.cellExclude[n][r0][c] == 0 {
+				t.Confirm(RCN(r0, c, n))
+				break
+			}
 		}
-		t.Confirm(RCN(r1, c, n))
 	case 9:
 		reason := ""
 		if !*flagShowOnlyResult {
@@ -241,16 +244,14 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 
 	switch blockExcludes {
 	case 8:
-		r1 := 0
-		c1 := 0
-		for r0 := range loop3 {
+		loopRow: for r0 := range loop3 {
 			for c0 := range loop3 {
-				cellMatched := 1 - int(s.cellExclude[n][R*3+r0][C*3+c0])
-				r1 += r0 * cellMatched
-				c1 += c0 * cellMatched
+				if s.cellExclude[n][R*3+r0][C*3+c0] == 0 {
+					t.Confirm(RCN(R*3+r0, C*3+c0, n))
+					break loopRow
+				}
 			}
 		}
-		t.Confirm(RCN(R*3+r1, C*3+c1, n))
 	case 9:
 		reason := ""
 		if !*flagShowOnlyResult {
