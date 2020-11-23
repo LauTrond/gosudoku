@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"hash/crc64"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -309,29 +310,6 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	return true
 }
 
-// 获取当前无法排除的所有填充选项。
-func (s *Situation) Choices(cnt int) []GuessItem {
-	result := make([]GuessItem, 0, 8)
-	for r := range loop9 {
-		for c := range loop9 {
-			if int(s.cellNumExcludes[r][c]) != 9-cnt {
-				continue
-			}
-			nums := make([]int8, 0, 4)
-			for n := range loop9 {
-				if s.cellExclude[n][r][c] == 0 {
-					nums = append(nums, int8(n))
-				}
-			}
-			result = append(result, GuessItem{
-				RowCol: RowCol{int8(r), int8(c)},
-				Nums:   nums,
-			})
-		}
-	}
-	return result
-}
-
 func (s *Situation) Show(title string, r, c int) {
 	lines := strings.Split(title, "\n")
 	lines[0] = fmt.Sprintf("<%02d> %s", s.setCount, lines[0])
@@ -342,17 +320,48 @@ func (s *Situation) Show(title string, r, c int) {
 	ShowCells(&s.cells, title, r, c)
 }
 
-func (s *Situation) CompareGuestItem(c1, c2 *GuessItem) bool {
-	//Nums数量少的优先
-	if len(c1.Nums) != len(c2.Nums) {
-		return len(c1.Nums) < len(c2.Nums)
+func (s *Situation) ChooseGuessingCell() GuessItem {
+	var (
+		rSel, cSel int
+		nums []int8
+	)
+
+	isBetter := func(r, c int) bool {
+		if s.cellNumExcludes[r][c] != s.cellNumExcludes[rSel][cSel] {
+			return s.cellNumExcludes[r][c] > s.cellNumExcludes[rSel][cSel]
+		}
+		return (r*277 + c*659) % 997 < (rSel*277 + cSel*659) % 997
 	}
-	//随便一个吧
-	return c1.Hash() < c2.Hash()
+
+	for r := range loop9 {
+		for c := range loop9 {
+			if s.cellNumExcludes[r][c] >= 8 {
+				continue
+			}
+			if nums == nil || isBetter(r, c) {
+				rSel, cSel = r, c
+				nums = nums[0:0]
+				for n := range loop9 {
+					if s.cellExclude[n][r][c] == 0 {
+						nums = append(nums, int8(n))
+					}
+				}
+			}
+		}
+	}
+
+	sort.Slice(nums, func(i, j int) bool {
+		return s.CompareNumInCell(rSel,cSel, int(nums[i]), int(nums[j]))
+	})
+
+	return GuessItem{
+		RowCol: RowCol{Row: int8(rSel), Col: int8(cSel)},
+		Nums: nums,
+	}
 }
 
 //选择哪个号码开始猜测，返回true表示n1比较好
-func (s *Situation) CompareNumInCell(rc RowCol, n1, n2 int) bool {
+func (s *Situation) CompareNumInCell(r, c, n1, n2 int) bool {
 	//我也不知道为啥这个指标会有效，只是测试结果表明，这样蒙对的概率更高
 	score1 := int(s.numExcludes[n1])
 	score2 := int(s.numExcludes[n2])
@@ -360,7 +369,7 @@ func (s *Situation) CompareNumInCell(rc RowCol, n1, n2 int) bool {
 		return score1 < score2
 	}
 
-	base := int(rc.Row)*4 + int(rc.Col)*7
+	base := r*4 + c*7
 	return (base+n1)%9 < (base+n2)%9
 }
 
@@ -458,23 +467,19 @@ type Trigger struct {
 }
 
 func NewTrigger() *Trigger {
-	t := &Trigger{
-		Confirms: make([]RowColNum, 0, 32),
-	}
-	return t
+	return &Trigger{}
+}
+
+func (t *Trigger) Init() {
+	t.Confirms = t.Confirms[:0]
+	t.Conflicts = nil
 }
 
 func (t *Trigger) Confirm(rcn RowColNum) {
-	if t == nil {
-		return
-	}
 	t.Confirms = append(t.Confirms, rcn)
 }
 
 func (t *Trigger) Conflict(msg string) {
-	if t == nil {
-		return
-	}
 	t.Conflicts = append(t.Conflicts, msg)
 }
 

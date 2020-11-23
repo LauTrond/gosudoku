@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"path"
-	"sort"
 	"strings"
 )
 
@@ -55,32 +54,17 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 	//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
 
 	//获取所有可能的选项
-	var choices []GuessItem
-	for i := 2 ; i <= 9 ; i++ {
-		choices = s.Choices(i)
-		if len(choices) > 0 {
-			break
-		}
-	}
-	try := choices[0]
-	for _, c := range choices {
-		if s.CompareGuestItem(&c, &try) {
-			try = c
-		}
-	}
-	sort.Slice(try.Nums, func(i, j int) bool {
-		return s.CompareNumInCell(try.RowCol, int(try.Nums[i]), int(try.Nums[j]))
-	})
+	guess := s.ChooseGuessingCell()
 
 	var count int
-	for _, n := range try.Nums {
+	for _, n := range guess.Nums {
 		s2 := s.Copy()
-		t = NewTrigger()
-		s2.Set(t, RowColNum{RowCol: try.RowCol, Num: int8(n)})
+		t.Init()
+		s2.Set(t, RowColNum{RowCol: guess.RowCol, Num: int8(n)})
 		ctx.evalCount++
 		ctx.guessesCount++
 		if !*flagShowOnlyResult {
-			s2.Show("在可能的选项里猜一个", int(try.Row), int(try.Col))
+			s2.Show("在可能的选项里猜一个", int(guess.Row), int(guess.Col))
 		}
 		if len(t.Conflicts) > 0 {
 			if !*flagShowOnlyResult {
@@ -94,7 +78,7 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 		name := ""
 		if *flagShowBranch {
 			name = path.Join(branchName,
-				fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), try.Row+1, try.Col+1, n+1))
+				fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), guess.Row+1, guess.Col+1, n+1))
 		}
 		count += ctx.recurseEval(s2, t, name)
 		s2.Release()
@@ -115,9 +99,9 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 // logicalEval 开始推断局势 s，直到没有找到确定的填充选项，不确保全部完成。
 // 如果返回false，表示这个局势有矛盾。
 func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
-	for len(t.Confirms) > 0 || len(t.Conflicts) > 0 {
-		last := t
-		t = NewTrigger()
+	last := t
+	t = NewTrigger()
+	for len(last.Confirms) > 0 || len(last.Conflicts) > 0 {
 		for _, rcn := range last.Confirms {
 			cellNumExcludes := s.cellNumExcludes[rcn.Row][rcn.Col]
 			rowExcludes := s.rowExcludes[rcn.Num][rcn.Row]
@@ -152,6 +136,9 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 				}
 			}
 		}
+		//避免重复创建Trigger对象，这里使用两个交替使用
+		t, last = last, t
+		t.Init()
 	}
 	if s.Completed() && !*flagShowOnlyResult {
 		fmt.Println("找到了一个解")
