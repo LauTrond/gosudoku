@@ -316,14 +316,14 @@ func (s *Situation) Choices(cnt int) []GuessItem {
 			if int(s.cellNumExcludes[r][c]) != 9-cnt {
 				continue
 			}
-			nums := make([]int8, 0, 4)
+			nums := make([]int, 0, 4)
 			for n := range loop9 {
 				if s.cellExclude[n][r][c] == 0 {
-					nums = append(nums, int8(n))
+					nums = append(nums, n)
 				}
 			}
 			result = append(result, GuessItem{
-				RowCol: RowCol{int8(r), int8(c)},
+				RowCol: RowCol{r, c},
 				Nums:   nums,
 			})
 		}
@@ -404,7 +404,7 @@ func (s *Situation) Completed() bool {
 }
 
 type RowCol struct {
-	Row, Col int8
+	Row, Col int
 }
 
 func (rc RowCol) Block() RowCol {
@@ -423,8 +423,8 @@ func (rc RowCol) LeftTop() RowCol {
 
 func (rc RowCol) Add(r, c int) RowCol {
 	return RowCol{
-		rc.Row + int8(r),
-		rc.Col + int8(c),
+		rc.Row + r,
+		rc.Col + c,
 	}
 }
 
@@ -434,16 +434,16 @@ func (rc RowCol) Hash() int {
 
 type RowColNum struct {
 	RowCol
-	Num int8
+	Num int
 }
 
 func RCN(r, c, n int) RowColNum {
 	return RowColNum{
 		RowCol: RowCol{
-			Row: int8(r),
-			Col: int8(c),
+			Row: r,
+			Col: c,
 		},
-		Num: int8(n),
+		Num: n,
 	}
 }
 
@@ -479,7 +479,7 @@ func (t *Trigger) Conflict(msg string) {
 
 type GuessItem struct {
 	RowCol
-	Nums []int8
+	Nums []int
 }
 
 func add(p *int8, n int8) int8 {
