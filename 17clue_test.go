@@ -20,8 +20,9 @@ import (
 //最快纪录是 Tdoku C++ 的 0.2 秒。
 //本程序成绩是1秒左右，使用了多线程。无多线程成绩约3秒。
 
-const inputFile = "assets/17_clue.txt"
-const outputFile = "output/17_clue_contest.txt"
+const parallel17Clue = 8
+const inputFile17Clue = "assets/17_clue.txt"
+const outputFile17Clue = "output/17_clue_contest.txt"
 
 func Test17ClueContest(t *testing.T) {
 	check := func(err error) {
@@ -33,18 +34,17 @@ func Test17ClueContest(t *testing.T) {
 	*flagShowOnlyResult = true
 	*flagShowStopAtFirst = true
 
-	parallel := 8
-	throttle := make(chan struct{}, parallel)
-	runtime.GOMAXPROCS(parallel)
+	runtime.GOMAXPROCS(parallel17Clue)
+	throttle := make(chan struct{}, parallel17Clue)
 
-	input, err := os.Open(inputFile); check(err)
+	input, err := os.Open(inputFile17Clue); check(err)
 	defer input.Close()
 	br := bufio.NewReader(input)
 	firstLine, err := br.ReadString('\n'); check(err)
 	total, err := strconv.Atoi(strings.TrimSuffix(firstLine,"\n")); check(err)
 
-	err = os.MkdirAll(filepath.Dir(outputFile), 0755); check(err)
-	output, err := os.Create(outputFile); check(err)
+	err = os.MkdirAll(filepath.Dir(outputFile17Clue), 0755); check(err)
+	output, err := os.Create(outputFile17Clue); check(err)
 	defer output.Close()
 
 	outputLines := make([]chan []byte, total)
