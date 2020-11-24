@@ -21,7 +21,7 @@ const (
 )
 
 func TestCPUProfile(t *testing.T) {
-	runtime.GOMAXPROCS(2)
+	runtime.GOMAXPROCS(4)
 	err := os.MkdirAll(filepath.Dir(pprofOutput), 0755)
 	if err != nil {
 		t.Fatal(err)

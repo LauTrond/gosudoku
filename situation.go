@@ -275,7 +275,6 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 				}
 			}
 		}
-
 	}
 
 	if colExcludes == 6 || colExcludes == 7 {
@@ -323,21 +322,32 @@ func (s *Situation) Show(title string, r, c int) {
 	ShowCells(&s.cells, title, r, c)
 }
 
+var RowColHash [9][9]int
+
+func init() {
+	for r := range loop9 {
+		for c := range loop9 {
+			RowColHash[r][c] = ( r*317 + c * 659 ) % 997
+		}
+	}
+}
+
 func (s *Situation) ChooseGuessingCell() GuessItem {
-	var exSel, rSel, cSel int
+	exSel := -1
+	var rSel, cSel int
 
 	isBetter := func(r, c int) bool {
 		if ex := int(s.cellNumExcludes[r][c]); ex != exSel {
 			return ex > exSel
 		}
-		return (r*277 + c*659) % 997 < (rSel*277 + cSel*659) % 997
+		return RowColHash[r][c] < RowColHash[rSel][cSel]
 	}
 	for r := range loop9 {
 		for c := range loop9 {
 			if s.cellNumExcludes[r][c] >= 8 {
 				continue
 			}
-			if exSel == 0 || isBetter(r, c) {
+			if isBetter(r, c) {
 				exSel = int(s.cellNumExcludes[r][c])
 				rSel, cSel = r, c
 			}
@@ -354,7 +364,10 @@ func (s *Situation) ChooseGuessingCell() GuessItem {
 	})
 
 	return GuessItem{
-		RowCol: RowCol{Row: int(rSel), Col: int(cSel)},
+		RowCol: RowCol{
+			Row: int(rSel),
+			Col: int(cSel),
+		},
 		Nums: nums,
 	}
 }

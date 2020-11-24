@@ -38,7 +38,7 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 		t.Fatal("parallel must >= 1")
 	}
 
-	runtime.GOMAXPROCS(parallel+1)
+	runtime.GOMAXPROCS(parallel+2)
 	check := func(err error) {
 		if err != nil {
 			panic(err)
@@ -64,8 +64,8 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	startTime := time.Now()
 	fmt.Printf("测试集：%v\n", inputFile)
 	fmt.Printf("输出文件：%v\n", outputFile)
-	fmt.Printf("启动时间：%v\n", startTime.Format("2006-01-02 15:04:05"))
 	fmt.Printf("线程数：%v\n", parallel)
+	fmt.Printf("启动时间：%v\n", startTime.Format("2006-01-02 15:04:05"))
 
 	getLine := func() ([]byte, bool) {
 		for {
@@ -154,7 +154,7 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	dur := time.Since(startTime)
 	fmt.Printf("总耗时：%v\n", dur.String())
 	fmt.Printf("总局数：%d\n", puzzlesCount)
-	fmt.Printf("速度（/s）：%.2f\n", float64(puzzlesCount)/dur.Seconds())
+	fmt.Printf("速率：%.2f\n", float64(puzzlesCount)/dur.Seconds())
 	fmt.Printf("总猜次数：%d\n", guessesCount)
 	fmt.Printf("总演算次数：%d\n", evalCount)
 }
