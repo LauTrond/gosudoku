@@ -25,6 +25,10 @@ func TestHardest1905_11(t *testing.T) {
 	benchmark(t, 1, "assets/hardest_1905_11.txt", "output/hardest_1905_11.txt")
 }
 
+func TestHardest1905_11_6T(t *testing.T) {
+	benchmark(t, 6, "assets/hardest_1905_11.txt", "output/hardest_1905_11.txt")
+}
+
 func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	if parallel < 1 {
 		t.Fatal("parallel must >= 1")
@@ -52,7 +56,10 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	puzzlesCount := 0
 	guessesCount := 0
 	evalCount := 0
+
 	startTime := time.Now()
+	fmt.Printf("启动时间：%v\n", startTime.Format("2006-01-02 15:04:05"))
+	fmt.Printf("线程数：%v\n", parallel)
 
 	getLine := func() ([]byte, bool) {
 		for {
@@ -138,8 +145,10 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 		}
 	}
 
-	fmt.Printf("总耗时：%v\n", time.Since(startTime).String())
+	dur := time.Since(startTime)
+	fmt.Printf("总耗时：%v\n", dur.String())
 	fmt.Printf("总局数：%d\n", puzzlesCount)
+	fmt.Printf("速度（/s）：%.2f\n", float64(puzzlesCount)/dur.Seconds())
 	fmt.Printf("总猜次数：%d\n", guessesCount)
 	fmt.Printf("总演算次数：%d\n", evalCount)
 }
