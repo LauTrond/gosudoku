@@ -15,9 +15,12 @@ import (
 	"time"
 )
 
-const pprofOutput = "output/pprof"
+const (
+	pprofOutput = "output/pprof"
+	pprofDuration = time.Minute
+)
 
-func TestFlame(t *testing.T) {
+func TestCPUProfile(t *testing.T) {
 	runtime.GOMAXPROCS(2)
 	err := os.MkdirAll(filepath.Dir(pprofOutput), 0755)
 	if err != nil {
@@ -39,7 +42,7 @@ func TestFlame(t *testing.T) {
 
 	pprof.StartCPUProfile(f)
 	startTime := time.Now()
-	for time.Since(startTime) < 30 * time.Second {
+	for time.Since(startTime) < pprofDuration {
 		for _, line := range lines {
 			puzzle := bytes.SplitN(line, []byte(","), 2)[0]
 			if len(puzzle) != 81 {

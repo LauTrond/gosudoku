@@ -324,35 +324,31 @@ func (s *Situation) Show(title string, r, c int) {
 }
 
 func (s *Situation) ChooseGuessingCell() GuessItem {
-	var (
-		rSel, cSel int
-		nums []int8
-	)
+	var exSel, rSel, cSel int
 
 	isBetter := func(r, c int) bool {
-		if s.cellNumExcludes[r][c] != s.cellNumExcludes[rSel][cSel] {
-			return s.cellNumExcludes[r][c] > s.cellNumExcludes[rSel][cSel]
+		if ex := int(s.cellNumExcludes[r][c]); ex != exSel {
+			return ex > exSel
 		}
 		return (r*277 + c*659) % 997 < (rSel*277 + cSel*659) % 997
 	}
-
 	for r := range loop9 {
 		for c := range loop9 {
 			if s.cellNumExcludes[r][c] >= 8 {
 				continue
 			}
-			if nums == nil || isBetter(r, c) {
+			if exSel == 0 || isBetter(r, c) {
+				exSel = int(s.cellNumExcludes[r][c])
 				rSel, cSel = r, c
-				nums = nums[0:0]
-				for n := range loop9 {
-					if s.cellExclude[n][r][c] == 0 {
-						nums = append(nums, int8(n))
-					}
-				}
 			}
 		}
 	}
-
+	nums := make([]int8, 0, 9 - exSel)
+	for n := range loop9 {
+		if s.cellExclude[n][rSel][cSel] == 0 {
+			nums = append(nums, int8(n))
+		}
+	}
 	sort.Slice(nums, func(i, j int) bool {
 		return s.CompareNumInCell(rSel,cSel, int(nums[i]), int(nums[j]))
 	})

@@ -17,6 +17,10 @@ func Test17Clue(t *testing.T) {
 	benchmark(t, 1, "assets/17_clue.txt", "output/17_clue.txt")
 }
 
+func Test17Clue_MT(t *testing.T) {
+	benchmark(t, runtime.NumCPU(), "assets/17_clue.txt", "output/17_clue.txt")
+}
+
 func TestHardest1106(t *testing.T) {
 	benchmark(t, 1, "assets/hardest_1106.txt", "output/hardest_1106.txt")
 }
@@ -25,8 +29,8 @@ func TestHardest1905_11(t *testing.T) {
 	benchmark(t, 1, "assets/hardest_1905_11.txt", "output/hardest_1905_11.txt")
 }
 
-func TestHardest1905_11_6T(t *testing.T) {
-	benchmark(t, 6, "assets/hardest_1905_11.txt", "output/hardest_1905_11.txt")
+func TestHardest1905_11_MT(t *testing.T) {
+	benchmark(t, runtime.NumCPU(), "assets/hardest_1905_11.txt", "output/hardest_1905_11.txt")
 }
 
 func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
@@ -58,6 +62,8 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	evalCount := 0
 
 	startTime := time.Now()
+	fmt.Printf("测试集：%v\n", inputFile)
+	fmt.Printf("输出文件：%v\n", outputFile)
 	fmt.Printf("启动时间：%v\n", startTime.Format("2006-01-02 15:04:05"))
 	fmt.Printf("线程数：%v\n", parallel)
 
@@ -115,7 +121,7 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 			check(err)
 		}
 	} else {
-		outputChannels := make(chan chan []byte, 1024)
+		outputChannels := make(chan chan []byte, parallel * 1024)
 		throttle := make(chan struct{}, parallel)
 
 		go func() {
