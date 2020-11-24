@@ -38,8 +38,6 @@ func TestFlame(t *testing.T) {
 	lines := bytes.Split(hardest, []byte("\n"))
 
 	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
-
 	startTime := time.Now()
 	for time.Since(startTime) < 30 * time.Second {
 		for _, line := range lines {
@@ -53,5 +51,11 @@ func TestFlame(t *testing.T) {
 			s.Release()
 		}
 	}
-	fmt.Fprintf(os.Stderr, "使用这个命令查看结果：\ngo tool pprof -http=:1234 %s\n", pprofOutput)
+	pprof.StopCPUProfile()
+	outputAbs, err := filepath.Abs(pprofOutput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintf(os.Stderr, "使用这个命令查看结果：\ngo tool pprof -http=:1234 %s\n",
+		outputAbs)
 }

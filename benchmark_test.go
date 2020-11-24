@@ -45,6 +45,7 @@ func RunSingleThread(t *testing.T, inputFile, outputFile string) {
 
 	puzzlesCount := 0
 	guessesCount := 0
+	evalCount := 0
 	startTime := time.Now()
 
 	for {
@@ -78,10 +79,12 @@ func RunSingleThread(t *testing.T, inputFile, outputFile string) {
 			_, err = output.Write(resultBytes); check(err)
 		}
 		guessesCount += ctx.guessesCount
+		evalCount += ctx.evalCount
 		s.Release()
 	}
 
 	fmt.Printf("总耗时：%v\n", time.Since(startTime).String())
 	fmt.Printf("总局数：%d\n", puzzlesCount)
 	fmt.Printf("总猜次数：%d\n", guessesCount)
+	fmt.Printf("总演算次数：%d\n", evalCount)
 }
