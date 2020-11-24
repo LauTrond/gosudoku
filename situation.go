@@ -197,6 +197,9 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 
 	switch cellNumExcludes {
 	case 8:
+		if s.cells[r][c] >= 0 {
+			break
+		}
 		for n0 := range loop9 {
 			if s.cellExclude[n0][r][c] == 0 {
 				t.Confirm(RCN(r, c, n0))
@@ -214,7 +217,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	switch rowExcludes {
 	case 8:
 		for c0 := range loop9 {
-			if s.cellExclude[n][r][c0] == 0 {
+			if s.cellExclude[n][r][c0] == 0 && s.cells[r][c0] < 0 {
 				t.Confirm(RCN(r, c0, n))
 				break
 			}
@@ -230,7 +233,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	switch colExcludes {
 	case 8:
 		for r0 := range loop9 {
-			if s.cellExclude[n][r0][c] == 0 {
+			if s.cellExclude[n][r0][c] == 0 && s.cells[r0][c] < 0 {
 				t.Confirm(RCN(r0, c, n))
 				break
 			}
@@ -247,7 +250,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	case 8:
 		loopRow: for r0 := range loop3 {
 			for c0 := range loop3 {
-				if s.cellExclude[n][R*3+r0][C*3+c0] == 0 {
+				if s.cellExclude[n][R*3+r0][C*3+c0] == 0 && s.cells[R*3+r0][C*3+c0] < 0 {
 					t.Confirm(RCN(R*3+r0, C*3+c0, n))
 					break loopRow
 				}
@@ -290,17 +293,17 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 
 	if blockExcludes == 6 || blockExcludes == 7 {
 		for _, rr0 := range loop3skip[rr] {
+			rr1 := 3 - rr - rr0
 			if rowSliceExcludes+s.rowSliceExcludes[n][R*3+rr0][C] == 6 {
 				for _, c0 := range loop9skip[C] {
-					rr1 := 3 - rr - rr0
 					s.Exclude(t, RCN(R*3+rr1, c0, n))
 				}
 			}
 		}
 		for _, cc0 := range loop3skip[cc] {
+			cc1 := 3 - cc - cc0
 			if colSliceExcludes+s.colSliceExcludes[n][R][C*3+cc0] == 6 {
 				for _, r0 := range loop9skip[R] {
-					cc1 := 3 - cc - cc0
 					s.Exclude(t, RCN(r0, C*3+cc1, n))
 				}
 			}
@@ -355,7 +358,7 @@ func (s *Situation) ChooseGuessingCell() GuessItem {
 	})
 
 	return GuessItem{
-		RowCol: RowCol{Row: int8(rSel), Col: int8(cSel)},
+		RowCol: RowCol{Row: int(rSel), Col: int(cSel)},
 		Nums: nums,
 	}
 }
@@ -414,7 +417,7 @@ func (s *Situation) Completed() bool {
 }
 
 type RowCol struct {
-	Row, Col int8
+	Row, Col int
 }
 
 func (rc RowCol) Block() RowCol {
@@ -433,8 +436,8 @@ func (rc RowCol) LeftTop() RowCol {
 
 func (rc RowCol) Add(r, c int) RowCol {
 	return RowCol{
-		rc.Row + int8(r),
-		rc.Col + int8(c),
+		rc.Row + int(r),
+		rc.Col + int(c),
 	}
 }
 
@@ -444,16 +447,16 @@ func (rc RowCol) Hash() int {
 
 type RowColNum struct {
 	RowCol
-	Num int8
+	Num int
 }
 
 func RCN(r, c, n int) RowColNum {
 	return RowColNum{
 		RowCol: RowCol{
-			Row: int8(r),
-			Col: int8(c),
+			Row: int(r),
+			Col: int(c),
 		},
-		Num: int8(n),
+		Num: int(n),
 	}
 }
 
@@ -467,7 +470,9 @@ type Trigger struct {
 }
 
 func NewTrigger() *Trigger {
-	return &Trigger{}
+	return &Trigger{
+		Confirms: make([]RowColNum, 0, 8),
+	}
 }
 
 func (t *Trigger) Init() {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -24,6 +25,7 @@ func TestHardest1905_11(t *testing.T) {
 }
 
 func RunSingleThread(t *testing.T, inputFile, outputFile string) {
+	runtime.GOMAXPROCS(2)
 	check := func(err error) {
 		if err != nil {
 			panic(err)

@@ -60,7 +60,7 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 	for _, n := range guess.Nums {
 		s2 := s.Copy()
 		t.Init()
-		s2.Set(t, RowColNum{RowCol: guess.RowCol, Num: int8(n)})
+		s2.Set(t, RowColNum{RowCol: guess.RowCol, Num: int(n)})
 		ctx.evalCount++
 		ctx.guessesCount++
 		if !*flagShowOnlyResult {
