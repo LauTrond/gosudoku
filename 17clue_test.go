@@ -18,9 +18,9 @@ import (
 //
 //解49151条17线索题，需要按规定输出文件并使用MD5检验，按耗时记成绩。
 //最快纪录是 Tdoku C++ 的 0.2 秒。
-//本程序成绩是1秒左右，使用了多线程。无多线程成绩约3秒。
+//本程序成绩是0.5秒左右，使用了多线程。无多线程成绩约2.5秒。
 
-const parallel17Clue = 8
+const parallel17Clue = 6
 const inputFile17Clue = "assets/17_clue.txt"
 const outputFile17Clue = "output/17_clue_contest.txt"
 
@@ -47,44 +47,51 @@ func Test17ClueContest(t *testing.T) {
 	output, err := os.Create(outputFile17Clue); check(err)
 	defer output.Close()
 
-	outputLines := make([]chan []byte, total)
-	for i := 0; i < total; i++ {
-		c := make(chan []byte, 1)
-		outputLines[i] = c
-		line, err := br.ReadBytes('\n')
-		if err != io.EOF {
-			check(err)
-		}
-		throttle<-struct{}{}
-		go func() {
-			defer func(){<-throttle}()
-
-			line = bytes.TrimSuffix(line,[]byte("\n"))
-			s, trg := ParseSituationFromLine(line)
-			ctx := newSudokuContext()
-			ctx.Run(s, trg)
-			if len(ctx.results) != 1 {
-				t.Error("unsolved:" + string(line))
-				return
+	outputChannels := make(chan chan []byte, 1024)
+	go func() {
+		for i := 0; i < total; i++ {
+			c := make(chan []byte, 1)
+			outputChannels <- c
+			line, err := br.ReadBytes('\n')
+			if err != io.EOF {
+				check(err)
 			}
-			result := ctx.results[0]
-			s.Release()
+			throttle <- struct{}{}
+			go func() {
+				defer func() { <-throttle }()
 
-			outline := make([]byte, 81 + 1 + 81 + 1)
-			copy(outline[0:81], line)
-			outline[81] = ','
-			for r := range loop9 {
-				for c := range loop9 {
-					outline[82 + r*9 + c] = byte(result[r][c]) + '1'
+				line = bytes.TrimSuffix(line, []byte("\n"))
+				s, trg := ParseSituationFromLine(line)
+				ctx := newSudokuContext()
+				ctx.Run(s, trg)
+				if len(ctx.results) != 1 {
+					t.Error("unsolved:" + string(line))
+					return
 				}
-			}
-			outline[81 + 1 + 81] = '\n'
-			c<-outline
-		}()
-	}
+				result := ctx.results[0]
+				s.Release()
+
+				outline := make([]byte, 81+1+81+1)
+				copy(outline[0:81], line)
+				outline[81] = ','
+				for r := range loop9 {
+					for c := range loop9 {
+						outline[82+r*9+c] = byte(result[r][c]) + '1'
+					}
+				}
+				outline[81+1+81] = '\n'
+				c <- outline
+			}()
+		}
+		close(outputChannels)
+	}()
 
 	_, err = fmt.Fprintln(output, total); check(err)
-	for _, c := range outputLines {
+	for {
+		c,ok := <-outputChannels
+		if !ok {
+			break
+		}
 		_, err = output.Write(<-c); check(err)
 	}
 }
