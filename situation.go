@@ -48,6 +48,9 @@ type Situation struct {
 	//等于 sum(cellExclude[n][r][...])
 	rowExcludes [9][9]int8
 
+	//
+	rowSumExcludes [9]int8
+
 	//rowExcludes[n][r][C] = x ： 第 r 行 C 宫的 n 排除了 x 个单元格
 	//rowExcludes[n][r][C] = sum(cellExclude[n][r][C*3..C*3+2])
 	rowSliceExcludes [9][9][3]int8
@@ -56,6 +59,9 @@ type Situation struct {
 	//colExcludes[n][c] = sum(cellExclude[n][...][c])
 	colExcludes [9][9]int8
 
+	//
+	colSumExcludes [9]int8
+
 	//colSliceExcludes[n][R][c] = x ： c 列 R 宫的 n 排除了 x 个单元格
 	//colSliceExcludes[n][R][c] = sum(cellExclude[n][R*3..R*3+2][c])
 	colSliceExcludes [9][3][9]int8
@@ -63,7 +69,7 @@ type Situation struct {
 	//blockExcludes[n][R][C] = x ：宫 (R,C) 的 n 排除了 x 个单元格
 	blockExcludes [9][3][3]int8
 
-	//以下是策略排除可能用到的参数
+	blockSumExcludes [3][3]int8
 
 	//分支代数，每执行一次Copy就加1
 	branchGeneration int
@@ -190,8 +196,11 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	_ = add(&s.numExcludes[n], 1)
 	cellNumExcludes := add(&s.cellNumExcludes[r][c], 1)
 	rowExcludes := add(&s.rowExcludes[n][r], 1)
+	_ = add(&s.rowSumExcludes[r], 1)
 	colExcludes := add(&s.colExcludes[n][c], 1)
+	_ = add(&s.colSumExcludes[c], 1)
 	blockExcludes := add(&s.blockExcludes[n][R][C], 1)
+	_ = add(&s.blockSumExcludes[R][C], 1)
 	rowSliceExcludes := add(&s.rowSliceExcludes[n][r][C], 1)
 	colSliceExcludes := add(&s.colSliceExcludes[n][R][c], 1)
 
@@ -248,7 +257,8 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 
 	switch blockExcludes {
 	case 8:
-		loopRow: for r0 := range loop3 {
+	loopRow:
+		for r0 := range loop3 {
 			for c0 := range loop3 {
 				if s.cellExclude[n][R*3+r0][C*3+c0] == 0 && s.cells[R*3+r0][C*3+c0] < 0 {
 					t.Confirm(RCN(R*3+r0, C*3+c0, n))
@@ -327,46 +337,64 @@ var RowColHash [9][9]int
 func init() {
 	for r := range loop9 {
 		for c := range loop9 {
-			RowColHash[r][c] = ( r*317 + c * 659 ) % 997
+			RowColHash[r][c] = (531 + r*317 + c*659) % 997
 		}
 	}
 }
 
 func (s *Situation) ChooseGuessingCell() GuessItem {
-	exSel := -1
-	var rSel, cSel int
+	type cellInfo struct {
+		row, col    int
+		excludeNums int
+		sumExcludes int
+	}
+	selected := cellInfo{
+		excludeNums: -1,
+	}
 
-	isBetter := func(r, c int) bool {
-		if ex := int(s.cellNumExcludes[r][c]); ex != exSel {
-			return ex > exSel
+	isBetter := func(candidate cellInfo) bool {
+		if candidate.excludeNums != selected.excludeNums {
+			return candidate.excludeNums > selected.excludeNums
 		}
-		return RowColHash[r][c] < RowColHash[rSel][cSel]
+		if candidate.sumExcludes != selected.sumExcludes {
+			return candidate.sumExcludes < selected.sumExcludes
+		}
+		return RowColHash[candidate.row][candidate.col] <
+			RowColHash[selected.row][selected.col]
 	}
 	for r := range loop9 {
 		for c := range loop9 {
 			if s.cellNumExcludes[r][c] >= 8 {
 				continue
 			}
-			if isBetter(r, c) {
-				exSel = int(s.cellNumExcludes[r][c])
-				rSel, cSel = r, c
+			candidate := cellInfo{
+				row:         r,
+				col:         c,
+				excludeNums: int(s.cellNumExcludes[r][c]),
+				sumExcludes: int(s.rowSumExcludes[r] +
+					s.colSumExcludes[c] +
+					s.blockSumExcludes[r/3][c/3]),
+			}
+			if isBetter(candidate) {
+				selected = candidate
 			}
 		}
 	}
-	nums := make([]int8, 0, 9 - exSel)
+	nums := make([]int8, 0, 9-selected.excludeNums)
 	for n := range loop9 {
-		if s.cellExclude[n][rSel][cSel] == 0 {
+		if s.cellExclude[n][selected.row][selected.col] == 0 {
 			nums = append(nums, int8(n))
 		}
 	}
 	sort.Slice(nums, func(i, j int) bool {
-		return s.CompareNumInCell(rSel,cSel, int(nums[i]), int(nums[j]))
+		return s.CompareNumInCell(selected.row, selected.col,
+			int(nums[i]), int(nums[j]))
 	})
 
 	return GuessItem{
 		RowCol: RowCol{
-			Row: int(rSel),
-			Col: int(cSel),
+			Row: int(selected.row),
+			Col: int(selected.col),
 		},
 		Nums: nums,
 	}
@@ -448,10 +476,6 @@ func (rc RowCol) Add(r, c int) RowCol {
 		rc.Row + int(r),
 		rc.Col + int(c),
 	}
-}
-
-func (rc RowCol) Hash() int {
-	return (int(rc.Row)*277 + int(rc.Col)*659) % 997
 }
 
 type RowColNum struct {

@@ -18,9 +18,10 @@ import (
 //
 //解49151条17线索题，需要按规定输出文件并使用MD5检验，按耗时记成绩。
 //最快纪录是 Tdoku C++ 的 0.2 秒。
-//本程序成绩是0.5秒左右，使用了多线程。无多线程成绩约2.5秒。
+//本程序使用了多线程
 
-const parallel17Clue = 6
+var parallel17Clue = runtime.NumCPU()
+
 const inputFile17Clue = "assets/17_clue.txt"
 const outputFile17Clue = "output/17_clue_contest.txt"
 
@@ -37,14 +38,19 @@ func Test17ClueContest(t *testing.T) {
 	runtime.GOMAXPROCS(parallel17Clue)
 	throttle := make(chan struct{}, parallel17Clue)
 
-	input, err := os.Open(inputFile17Clue); check(err)
+	input, err := os.Open(inputFile17Clue)
+	check(err)
 	defer input.Close()
 	br := bufio.NewReader(input)
-	firstLine, err := br.ReadString('\n'); check(err)
-	total, err := strconv.Atoi(strings.TrimSuffix(firstLine,"\n")); check(err)
+	firstLine, err := br.ReadString('\n')
+	check(err)
+	total, err := strconv.Atoi(strings.TrimSuffix(firstLine, "\n"))
+	check(err)
 
-	err = os.MkdirAll(filepath.Dir(outputFile17Clue), 0755); check(err)
-	output, err := os.Create(outputFile17Clue); check(err)
+	err = os.MkdirAll(filepath.Dir(outputFile17Clue), 0755)
+	check(err)
+	output, err := os.Create(outputFile17Clue)
+	check(err)
 	defer output.Close()
 
 	outputChannels := make(chan chan []byte, 1024)
@@ -86,12 +92,14 @@ func Test17ClueContest(t *testing.T) {
 		close(outputChannels)
 	}()
 
-	_, err = fmt.Fprintln(output, total); check(err)
+	_, err = fmt.Fprintln(output, total)
+	check(err)
 	for {
-		c,ok := <-outputChannels
+		c, ok := <-outputChannels
 		if !ok {
 			break
 		}
-		_, err = output.Write(<-c); check(err)
+		_, err = output.Write(<-c)
+		check(err)
 	}
 }

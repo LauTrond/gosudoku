@@ -1,6 +1,7 @@
 package main
 
 //烧机测试，循环执行hardest以获取火焰图
+//go test . -test.run CPUProfile && go tool pprof -http=:1234 output/pprof
 
 import (
 	"bytes"

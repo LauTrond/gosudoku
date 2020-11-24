@@ -7,9 +7,9 @@ import (
 )
 
 type SudokuContext struct {
-	evalCount int
+	evalCount    int
 	guessesCount int
-	results []*[9][9]int8
+	results      []*[9][9]int8
 }
 
 func newSudokuContext() *SudokuContext {

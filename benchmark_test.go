@@ -38,7 +38,7 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 		t.Fatal("parallel must >= 1")
 	}
 
-	runtime.GOMAXPROCS(parallel+2)
+	runtime.GOMAXPROCS(parallel + 2)
 	check := func(err error) {
 		if err != nil {
 			panic(err)
@@ -48,12 +48,15 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	*flagShowOnlyResult = true
 	*flagShowStopAtFirst = true
 
-	input, err := os.Open(inputFile); check(err)
+	input, err := os.Open(inputFile)
+	check(err)
 	defer input.Close()
 	br := bufio.NewReader(input)
 
-	err = os.MkdirAll(filepath.Dir(outputFile), 0755); check(err)
-	output, err := os.Create(outputFile); check(err)
+	err = os.MkdirAll(filepath.Dir(outputFile), 0755)
+	check(err)
+	output, err := os.Create(outputFile)
+	check(err)
 	defer output.Close()
 
 	var mtx sync.Mutex
@@ -121,7 +124,7 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 			check(err)
 		}
 	} else {
-		outputChannels := make(chan chan []byte, parallel * 1024)
+		outputChannels := make(chan chan []byte, parallel*1024)
 		throttle := make(chan struct{}, parallel)
 
 		go func() {
@@ -143,11 +146,12 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 		}()
 
 		for {
-			c,ok := <-outputChannels
+			c, ok := <-outputChannels
 			if !ok {
 				break
 			}
-			_, err = output.Write(<-c); check(err)
+			_, err = output.Write(<-c)
+			check(err)
 		}
 	}
 

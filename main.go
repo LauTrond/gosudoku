@@ -12,9 +12,9 @@ import (
 var (
 	flagShowOnlyResult  = flag.Bool("result", false, "不显示中间步骤，只显示解")
 	flagShowStopAtFirst = flag.Bool("one", false, "找到一个解即停止")
-	flagShowStat = flag.Bool("stat", false, "显示运算统计信息")
-	flagShowBranch = flag.Bool("branch", false, "显示分支结构")
-	flagBenchmark = flag.Bool("b", false, "(Benchmark)相当于 -result -one -stat 组合")
+	flagShowStat        = flag.Bool("stat", false, "显示运算统计信息")
+	flagShowBranch      = flag.Bool("branch", false, "显示分支结构")
+	flagBenchmark       = flag.Bool("b", false, "(Benchmark)相当于 -result -one -stat 组合")
 )
 
 const MsgUsage = `使用方法：
