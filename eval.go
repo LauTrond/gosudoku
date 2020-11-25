@@ -9,7 +9,7 @@ import (
 type SudokuContext struct {
 	evalCount    int
 	guessesCount int
-	results      []*[9][9]int8
+	solutions    []*[9][9]int8
 }
 
 func newSudokuContext() *SudokuContext {
@@ -47,7 +47,7 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 			fmt.Println(branchName, "找到解")
 		}
 		cells := s.cells
-		ctx.results = append(ctx.results, &cells)
+		ctx.solutions = append(ctx.solutions, &cells)
 		return 1
 	}
 
@@ -82,7 +82,7 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 		}
 		count += ctx.recurseEval(s2, t, name)
 		s2.Release()
-		if count > 0 && *flagShowStopAtFirst {
+		if count > 0 && *flagStopAtFirstSolution {
 			break
 		}
 	}

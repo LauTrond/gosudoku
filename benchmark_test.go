@@ -21,10 +21,6 @@ func Test17Clue_MT(t *testing.T) {
 	benchmark(t, runtime.NumCPU(), "assets/17_clue.txt", "output/17_clue.txt")
 }
 
-func TestHardest1106(t *testing.T) {
-	benchmark(t, 1, "assets/hardest_1106.txt", "output/hardest_1106.txt")
-}
-
 func TestHardest1905_11(t *testing.T) {
 	benchmark(t, 1, "assets/hardest_1905_11.txt", "output/hardest_1905_11.txt")
 }
@@ -32,6 +28,16 @@ func TestHardest1905_11(t *testing.T) {
 func TestHardest1905_11_MT(t *testing.T) {
 	benchmark(t, runtime.NumCPU(), "assets/hardest_1905_11.txt", "output/hardest_1905_11.txt")
 }
+
+func TestHardest1106(t *testing.T) {
+	benchmark(t, 1, "assets/hardest_1106.txt", "output/hardest_1106.txt")
+}
+
+func TestHardest1106_MT(t *testing.T) {
+	benchmark(t, runtime.NumCPU(), "assets/hardest_1106.txt", "output/hardest_1106.txt")
+}
+
+const overwriteOutput = false
 
 func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	if parallel < 1 {
@@ -46,27 +52,58 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	}
 
 	*flagShowOnlyResult = true
-	*flagShowStopAtFirst = true
+	//*flagStopAtFirstSolution = true
 
 	input, err := os.Open(inputFile)
 	check(err)
 	defer input.Close()
 	br := bufio.NewReader(input)
 
-	err = os.MkdirAll(filepath.Dir(outputFile), 0755)
-	check(err)
-	output, err := os.Create(outputFile)
-	check(err)
-	defer output.Close()
+	if !overwriteOutput {
+		if _, err = os.Stat(outputFile); err == nil {
+			//outputFile exists
+			fmt.Printf("%s 文件已经存在，屏蔽输出\n", outputFile)
+			outputFile = ""
+		}
+	}
+
+	var output *os.File
+	if outputFile != "" {
+		outputDir := filepath.Dir(outputFile)
+		outputTmp := "." + filepath.Base(outputFile) + ".tmp"
+		outputTmpPath := filepath.Join(outputDir, outputTmp)
+		err = os.MkdirAll(outputDir, 0755)
+		check(err)
+		output, err = os.Create(outputTmpPath)
+		check(err)
+		defer func() {
+			err := output.Close()
+			check(err)
+			err = os.Rename(outputTmpPath, outputFile)
+			check(err)
+		}()
+	} else {
+		output, err = os.Create(os.DevNull)
+		check(err)
+		defer func() {
+			err := output.Close()
+			check(err)
+		}()
+	}
 
 	var mtx sync.Mutex
 	puzzlesCount := 0
 	guessesCount := 0
 	evalCount := 0
+	succCount := 0
 
 	startTime := time.Now()
+	outputFilePrint := outputFile
+	if outputFilePrint == "" {
+		outputFilePrint = "<无>"
+	}
 	fmt.Printf("测试集：%v\n", inputFile)
-	fmt.Printf("输出文件：%v\n", outputFile)
+	fmt.Printf("输出文件：%s\n", outputFilePrint)
 	fmt.Printf("线程数：%v\n", parallel)
 	fmt.Printf("启动时间：%v\n", startTime.Format("2006-01-02 15:04:05"))
 
@@ -91,36 +128,43 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 		s, trg := ParseSituationFromLine(line)
 		ctx := newSudokuContext()
 		ctx.Run(s, trg)
-		if len(ctx.results) != 1 {
-			t.Fatal("unsolved:" + string(line))
-		}
-		result := ctx.results[0]
-		resultBytes := make([]byte, 82)
-		for r := range loop9 {
-			for c := range loop9 {
-				resultBytes[r*9+c] = byte('1' + result[r][c])
+
+		var solutionLine []byte
+
+		if len(ctx.solutions) == 1 {
+			solution := ctx.solutions[0]
+			solutionLine = make([]byte, 82)
+			for r := range loop9 {
+				for c := range loop9 {
+					solutionLine[r*9+c] = byte('1' + solution[r][c])
+				}
 			}
+			solutionLine[81] = '\n'
+		} else {
+			solutionLine = []byte(fmt.Sprintf("%d solution(s)", len(ctx.solutions)))
 		}
-		resultBytes[81] = '\n'
 
 		mtx.Lock()
 		puzzlesCount += 1
+		if len(ctx.solutions) == 1 {
+			succCount++
+		}
 		guessesCount += ctx.guessesCount
 		evalCount += ctx.evalCount
 		mtx.Unlock()
 		s.Release()
 
-		return resultBytes
+		return solutionLine
 	}
 
 	if parallel == 1 {
 		for {
-			line, ok := getLine()
+			puzzleLine, ok := getLine()
 			if !ok {
 				break
 			}
-			resultBytes := proceed(line)
-			_, err = output.Write(resultBytes)
+			resultLine := proceed(puzzleLine)
+			_, err = output.Write(resultLine)
 			check(err)
 		}
 	} else {
@@ -129,17 +173,17 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 
 		go func() {
 			for {
-				line, ok := getLine()
+				puzzleLine, ok := getLine()
 				if !ok {
 					break
 				}
 				throttle <- struct{}{}
-				outputChan := make(chan []byte, 1)
-				outputChannels <- outputChan
+				lineChan := make(chan []byte, 1)
+				outputChannels <- lineChan
 				go func() {
 					defer func() { <-throttle }()
-					resultBytes := proceed(line)
-					outputChan <- resultBytes
+					resultBytes := proceed(puzzleLine)
+					lineChan <- resultBytes
 				}()
 			}
 			close(outputChannels)
@@ -156,9 +200,10 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	}
 
 	dur := time.Since(startTime)
-	fmt.Printf("总耗时：%v\n", dur.String())
+	fmt.Printf("总耗时：%.3fs\n", dur.Seconds())
 	fmt.Printf("总局数：%d\n", puzzlesCount)
-	fmt.Printf("速率：%.2f\n", float64(puzzlesCount)/dur.Seconds())
+	fmt.Printf("唯一解局数：%d\n", succCount)
+	fmt.Printf("速率(局/s)：%.2f\n", float64(puzzlesCount)/dur.Seconds())
 	fmt.Printf("总猜次数：%d\n", guessesCount)
 	fmt.Printf("总演算次数：%d\n", evalCount)
 }

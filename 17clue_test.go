@@ -33,7 +33,7 @@ func Test17ClueContest(t *testing.T) {
 	}
 
 	*flagShowOnlyResult = true
-	*flagShowStopAtFirst = true
+	*flagStopAtFirstSolution = true
 
 	runtime.GOMAXPROCS(parallel17Clue)
 	throttle := make(chan struct{}, parallel17Clue)
@@ -70,11 +70,11 @@ func Test17ClueContest(t *testing.T) {
 				s, trg := ParseSituationFromLine(line)
 				ctx := newSudokuContext()
 				ctx.Run(s, trg)
-				if len(ctx.results) != 1 {
+				if len(ctx.solutions) != 1 {
 					t.Error("unsolved:" + string(line))
 					return
 				}
-				result := ctx.results[0]
+				solution := ctx.solutions[0]
 				s.Release()
 
 				outline := make([]byte, 81+1+81+1)
@@ -82,7 +82,7 @@ func Test17ClueContest(t *testing.T) {
 				outline[81] = ','
 				for r := range loop9 {
 					for c := range loop9 {
-						outline[82+r*9+c] = byte(result[r][c]) + '1'
+						outline[82+r*9+c] = byte(solution[r][c]) + '1'
 					}
 				}
 				outline[81+1+81] = '\n'
