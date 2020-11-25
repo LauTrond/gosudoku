@@ -8,43 +8,70 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
 func Test17Clue(t *testing.T) {
-	benchmark(t, 1, "assets/17_clue.txt", "output/17_clue.txt")
+	(&BenchmarkConfig{
+		InputFile: "assets/17_clue.txt",
+		OutputFile: "output/17_clue.txt",
+	}).Run(t)
 }
 
 func Test17Clue_MT(t *testing.T) {
-	benchmark(t, runtime.NumCPU(), "assets/17_clue.txt", "output/17_clue.txt")
+	(&BenchmarkConfig{
+		InputFile: "assets/17_clue.txt",
+		OutputFile: "output/17_clue.txt",
+		Parallel: runtime.NumCPU(),
+	}).Run(t)
 }
 
 func TestHardest1905_11(t *testing.T) {
-	benchmark(t, 1, "assets/hardest_1905_11.txt", "output/hardest_1905_11.txt")
+	(&BenchmarkConfig{
+		InputFile: "assets/hardest_1905_11.txt",
+		OutputFile: "output/hardest_1905_11.txt",
+	}).Run(t)
 }
 
 func TestHardest1905_11_MT(t *testing.T) {
-	benchmark(t, runtime.NumCPU(), "assets/hardest_1905_11.txt", "output/hardest_1905_11.txt")
+	(&BenchmarkConfig{
+		InputFile: "assets/hardest_1905_11.txt",
+		OutputFile: "output/hardest_1905_11.txt",
+		Parallel: runtime.NumCPU(),
+	}).Run(t)
 }
 
 func TestHardest1106(t *testing.T) {
-	benchmark(t, 1, "assets/hardest_1106.txt", "output/hardest_1106.txt")
+	(&BenchmarkConfig{
+		InputFile: "assets/hardest_1106.txt",
+		OutputFile: "output/hardest_1106.txt",
+	}).Run(t)
 }
 
 func TestHardest1106_MT(t *testing.T) {
-	benchmark(t, runtime.NumCPU(), "assets/hardest_1106.txt", "output/hardest_1106.txt")
+	(&BenchmarkConfig{
+		InputFile: "assets/hardest_1106.txt",
+		OutputFile: "output/hardest_1106.txt",
+		Parallel: runtime.NumCPU(),
+	}).Run(t)
 }
 
-const overwriteOutput = false
+type BenchmarkConfig struct {
+	Parallel int
+	InputFile string
+	OutputFile string
+	OverwriteOutputFile bool
+}
 
-func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
-	if parallel < 1 {
-		t.Fatal("parallel must >= 1")
+func (cfg *BenchmarkConfig) Run(t *testing.T) {
+	if cfg.Parallel < 1 {
+		cfg.Parallel = 1
 	}
 
-	runtime.GOMAXPROCS(parallel + 2)
+	runtime.GOMAXPROCS(cfg.Parallel + 2)
 	check := func(err error) {
 		if err != nil {
 			panic(err)
@@ -54,23 +81,23 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	*flagShowOnlyResult = true
 	//*flagStopAtFirstSolution = true
 
-	input, err := os.Open(inputFile)
+	input, err := os.Open(cfg.InputFile)
 	check(err)
 	defer input.Close()
 	br := bufio.NewReader(input)
 
-	if !overwriteOutput {
-		if _, err = os.Stat(outputFile); err == nil {
+	if !cfg.OverwriteOutputFile {
+		if _, err = os.Stat(cfg.OutputFile); err == nil {
 			//outputFile exists
-			fmt.Printf("%s 文件已经存在，屏蔽输出\n", outputFile)
-			outputFile = ""
+			fmt.Printf("%s 文件已经存在，屏蔽输出\n", cfg.OutputFile)
+			cfg.OutputFile = ""
 		}
 	}
 
 	var output *os.File
-	if outputFile != "" {
-		outputDir := filepath.Dir(outputFile)
-		outputTmp := "." + filepath.Base(outputFile) + ".tmp"
+	if cfg.OutputFile != "" {
+		outputDir := filepath.Dir(cfg.OutputFile)
+		outputTmp := "." + filepath.Base(cfg.OutputFile) + ".tmp"
 		outputTmpPath := filepath.Join(outputDir, outputTmp)
 		err = os.MkdirAll(outputDir, 0755)
 		check(err)
@@ -79,7 +106,7 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 		defer func() {
 			err := output.Close()
 			check(err)
-			err = os.Rename(outputTmpPath, outputFile)
+			err = os.Rename(outputTmpPath, cfg.OutputFile)
 			check(err)
 		}()
 	} else {
@@ -98,14 +125,14 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	succCount := 0
 
 	startTime := time.Now()
-	outputFilePrint := outputFile
+	outputFilePrint := cfg.OutputFile
 	if outputFilePrint == "" {
 		outputFilePrint = "<无>"
 	}
-	fmt.Printf("测试集：%v\n", inputFile)
-	fmt.Printf("输出文件：%s\n", outputFilePrint)
-	fmt.Printf("线程数：%v\n", parallel)
-	fmt.Printf("启动时间：%v\n", startTime.Format("2006-01-02 15:04:05"))
+	printNamedValue("测试集", "%s", cfg.InputFile)
+	printNamedValue("输出文件","%s", outputFilePrint)
+	printNamedValue("线程数","%d", cfg.Parallel)
+	printNamedValue("启动时间","%s", startTime.Format("2006-01-02 15:04:05"))
 
 	getLine := func() ([]byte, bool) {
 		for {
@@ -157,7 +184,7 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 		return solutionLine
 	}
 
-	if parallel == 1 {
+	if cfg.Parallel == 1 {
 		for {
 			puzzleLine, ok := getLine()
 			if !ok {
@@ -168,8 +195,8 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 			check(err)
 		}
 	} else {
-		outputChannels := make(chan chan []byte, parallel*1024)
-		throttle := make(chan struct{}, parallel)
+		outputChannels := make(chan chan []byte, cfg.Parallel*1024)
+		throttle := make(chan struct{}, cfg.Parallel)
 
 		go func() {
 			for {
@@ -200,10 +227,28 @@ func benchmark(t *testing.T, parallel int, inputFile, outputFile string) {
 	}
 
 	dur := time.Since(startTime)
-	fmt.Printf("总耗时：%.3fs\n", dur.Seconds())
-	fmt.Printf("总局数：%d\n", puzzlesCount)
-	fmt.Printf("唯一解局数：%d\n", succCount)
-	fmt.Printf("速率(局/s)：%.2f\n", float64(puzzlesCount)/dur.Seconds())
-	fmt.Printf("总猜次数：%d\n", guessesCount)
-	fmt.Printf("总演算次数：%d\n", evalCount)
+	printNamedValue("总耗时(s)", "%.3f", dur.Seconds())
+	printNamedValue("总局数", "%d", puzzlesCount)
+	printNamedValue("唯一解局数","%d", succCount)
+	printNamedValue("解题速率(局/s)","%.2f", float64(puzzlesCount)/dur.Seconds())
+	printNamedValue("分支数","%d", guessesCount)
+	printNamedValue("分支率(次/局)","%.2f", float64(guessesCount)/float64(puzzlesCount))
+	printNamedValue("总演算次数", "%d", evalCount)
+}
+
+func printNamedValue(name string, valueFmt string, value interface{}) {
+	tab := strings.Repeat(" ", 15-textWidth(name))
+	fmt.Printf("%s:%s%s\n", name, tab, fmt.Sprintf(valueFmt, value))
+}
+
+func textWidth(text string) int {
+	w := 0
+	for _, r := range text {
+		if r > 127 {
+			w += 2
+		} else {
+			w += 1
+		}
+	}
+	return w
 }

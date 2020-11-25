@@ -53,8 +53,9 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 
 	//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
 
-	//获取所有可能的选项
+	//选取一个单元格进行尝试
 	guess := s.ChooseGuessingCell()
+	ctx.guessesCount++
 
 	var count int
 	for _, n := range guess.Nums {
@@ -62,7 +63,6 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 		t.Init()
 		s2.Set(t, RowColNum{RowCol: guess.RowCol, Num: int(n)})
 		ctx.evalCount++
-		ctx.guessesCount++
 		if !*flagShowOnlyResult {
 			s2.Show("在可能的选项里猜一个", int(guess.Row), int(guess.Col))
 		}
