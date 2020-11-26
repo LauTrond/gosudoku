@@ -33,7 +33,6 @@ func TestCPUProfile(t *testing.T) {
 	}
 
 	*flagShowOnlyResult = true
-	*flagStopAtFirstSolution = true
 
 	hardest, err := ioutil.ReadFile("assets/hardest_1106.txt")
 	if err != nil {

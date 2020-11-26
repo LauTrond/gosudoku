@@ -64,6 +64,7 @@ type BenchmarkConfig struct {
 	InputFile string
 	OutputFile string
 	OverwriteOutputFile bool
+	StopAtFirstSolution bool
 }
 
 func (cfg *BenchmarkConfig) Run(t *testing.T) {
@@ -79,7 +80,7 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 	}
 
 	*flagShowOnlyResult = true
-	//*flagStopAtFirstSolution = true
+	*flagStopAtFirstSolution = cfg.StopAtFirstSolution
 
 	input, err := os.Open(cfg.InputFile)
 	check(err)
