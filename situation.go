@@ -48,7 +48,10 @@ type Situation struct {
 	//等于 sum(cellExclude[n][r][...])
 	rowExcludes [9][9]int8
 
-	//
+	// rowExcludeMask[n][r] >> c & 1 == cellExclude[n][r][c]
+	rowExcludeMask [9][9]int16
+
+	//rowSumExcludes[c] = sum(rowExcludes[...][r])
 	rowSumExcludes [9]int8
 
 	//rowExcludes[n][r][C] = x ： 第 r 行 C 宫的 n 排除了 x 个单元格
@@ -59,7 +62,10 @@ type Situation struct {
 	//colExcludes[n][c] = sum(cellExclude[n][...][c])
 	colExcludes [9][9]int8
 
-	//
+	//colExcludeMask[n][c] >> r & 1 == cellExclude[n][r][c]
+	colExcludeMask [9][9]int16
+
+	//colSumExcludes[c] = sum(colExcludes[...][c])
 	colSumExcludes [9]int8
 
 	//colSliceExcludes[n][R][c] = x ： c 列 R 宫的 n 排除了 x 个单元格
@@ -69,6 +75,10 @@ type Situation struct {
 	//blockExcludes[n][R][C] = x ：宫 (R,C) 的 n 排除了 x 个单元格
 	blockExcludes [9][3][3]int8
 
+	//blockExcludes[n][R][C] >> k & 1 == cellExclude[n][R*3+k/3][C*3+k%3]
+	blockExcludeMask [9][3][3]int16
+
+	//blockSumExcludes[R][C] = sum(blockExcludes[...][R][C])
 	blockSumExcludes [3][3]int8
 
 	//分支代数，每执行一次Copy就加1
@@ -180,6 +190,11 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 			}
 		}
 	}
+	for i := 0; i < len(t.Excludes); i++ {
+		s.Exclude(t, t.Excludes[i])
+	}
+	t.Excludes = t.Excludes[:0]
+
 	return true
 }
 
@@ -204,6 +219,16 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	rowSliceExcludes := add(&s.rowSliceExcludes[n][r][C], 1)
 	colSliceExcludes := add(&s.colSliceExcludes[n][R][c], 1)
 
+	s.rowExcludeMask[n][r] |= 1 << int16(c)
+	s.colExcludeMask[n][c] |= 1 << int16(r)
+	s.blockExcludeMask[n][R][C] |= 1 << int16(rr*3+cc)
+
+	delayedExclude := func(other RowColNum) {
+		if s.cellExclude[other.Num][other.Row][other.Col] == 0 {
+			t.Exclude(other)
+		}
+	}
+
 	switch cellNumExcludes {
 	case 8:
 		if s.cells[r][c] >= 0 {
@@ -224,6 +249,42 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	}
 
 	switch rowExcludes {
+	case 7:
+		n0 := -1
+		for n1 := range loop9 {
+			if n1 == n {
+				continue
+			}
+			if s.rowExcludeMask[n1][r] == s.rowExcludeMask[n][r] {
+				n0 = n1
+				break
+			}
+		}
+		if n0 == -1 {
+			break
+		}
+
+		c0, c1 := -1, -1
+		for c2 := range loop9 {
+			if s.cellExclude[n][r][c2] == 0 {
+				if c0 == -1 {
+					c0 = c2
+				} else {
+					c1 = c2
+					break
+				}
+			}
+		}
+		if c1 == -1 {
+			panic("should not be here")
+		}
+
+		for n1 := range loop9 {
+			if n1 != n && n1 != n0 {
+				delayedExclude(RCN(r, c0, n1))
+				delayedExclude(RCN(r, c1, n1))
+			}
+		}
 	case 8:
 		for c0 := range loop9 {
 			if s.cellExclude[n][r][c0] == 0 && s.cells[r][c0] < 0 {
@@ -240,6 +301,42 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	}
 
 	switch colExcludes {
+	case 7:
+		n0 := -1
+		for n1 := range loop9 {
+			if n1 == n {
+				continue
+			}
+			if s.colExcludeMask[n1][c] == s.colExcludeMask[n][c] {
+				n0 = n1
+				break
+			}
+		}
+		if n0 == -1 {
+			break
+		}
+
+		r0, r1 := -1, -1
+		for r2 := range loop9 {
+			if s.cellExclude[n][r2][c] == 0 {
+				if r0 == -1 {
+					r0 = r2
+				} else {
+					r1 = r2
+					break
+				}
+			}
+		}
+		if r1 == -1 {
+			panic("should not be here")
+		}
+
+		for n1 := range loop9 {
+			if n1 != n && n1 != n0 {
+				delayedExclude(RCN(r0, c, n1))
+				delayedExclude(RCN(r1, c, n1))
+			}
+		}
 	case 8:
 		for r0 := range loop9 {
 			if s.cellExclude[n][r0][c] == 0 && s.cells[r0][c] < 0 {
@@ -256,6 +353,42 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	}
 
 	switch blockExcludes {
+	case 7:
+		n0 := -1
+		for n1 := range loop9 {
+			if n1 == n {
+				continue
+			}
+			if s.blockExcludeMask[n1][R][C] == s.blockExcludeMask[n][R][C] {
+				n0 = n1
+				break
+			}
+		}
+		if n0 == -1 {
+			break
+		}
+
+		d0, d1 := -1, -1
+		for d2 := range loop9 {
+			if s.cellExclude[n][R*3+d2/3][C*3+d2%3] == 0 {
+				if d0 == -1 {
+					d0 = d2
+				} else {
+					d1 = d2
+					break
+				}
+			}
+		}
+		if d1 == -1 {
+			panic("should not be here")
+		}
+
+		for n1 := range loop9 {
+			if n1 != n && n1 != n0 {
+				delayedExclude(RCN(R*3+d0/3, C*3+d0%3, n1))
+				delayedExclude(RCN(R*3+d1/3, C*3+d1%3, n1))
+			}
+		}
 	case 8:
 	loopRow:
 		for r0 := range loop3 {
@@ -280,7 +413,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 			if rowSliceExcludes+s.rowSliceExcludes[n][r][C0] == 6 {
 				for _, rr1 := range loop3skip[rr] {
 					for cc1 := range loop3 {
-						s.Exclude(t, RCN(R*3+rr1, C1*3+cc1, n))
+						delayedExclude(RCN(R*3+rr1, C1*3+cc1, n))
 					}
 				}
 			}
@@ -293,7 +426,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 			if colSliceExcludes+s.colSliceExcludes[n][R0][c] == 6 {
 				for rr1 := range loop3 {
 					for _, cc1 := range loop3skip[cc] {
-						s.Exclude(t, RCN(R1*3+rr1, C*3+cc1, n))
+						delayedExclude(RCN(R1*3+rr1, C*3+cc1, n))
 					}
 				}
 			}
@@ -305,7 +438,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 			rr1 := 3 - rr - rr0
 			if rowSliceExcludes+s.rowSliceExcludes[n][R*3+rr0][C] == 6 {
 				for _, c0 := range loop9skip[C] {
-					s.Exclude(t, RCN(R*3+rr1, c0, n))
+					delayedExclude(RCN(R*3+rr1, c0, n))
 				}
 			}
 		}
@@ -313,7 +446,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 			cc1 := 3 - cc - cc0
 			if colSliceExcludes+s.colSliceExcludes[n][R][C*3+cc0] == 6 {
 				for _, r0 := range loop9skip[R] {
-					s.Exclude(t, RCN(r0, C*3+cc1, n))
+					delayedExclude(RCN(r0, C*3+cc1, n))
 				}
 			}
 		}
@@ -499,22 +632,29 @@ func (rcn RowColNum) Extract() (r, c, n int) {
 
 type Trigger struct {
 	Confirms  []RowColNum
+	Excludes  []RowColNum
 	Conflicts []string
 }
 
 func NewTrigger() *Trigger {
 	return &Trigger{
 		Confirms: make([]RowColNum, 0, 8),
+		Excludes: make([]RowColNum, 0, 8),
 	}
 }
 
 func (t *Trigger) Init() {
 	t.Confirms = t.Confirms[:0]
+	t.Excludes = t.Excludes[:0]
 	t.Conflicts = nil
 }
 
 func (t *Trigger) Confirm(rcn RowColNum) {
 	t.Confirms = append(t.Confirms, rcn)
+}
+
+func (t *Trigger) Exclude(rcn RowColNum) {
+	t.Excludes = append(t.Excludes, rcn)
 }
 
 func (t *Trigger) Conflict(msg string) {
