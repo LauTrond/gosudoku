@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"time"
 )
@@ -19,14 +18,14 @@ var (
 
 const MsgUsage = `使用方法：
 
-sudoku <file> 从文件加载谜题
-sudoku        从标准输入获取谜题
+gosudoku <file> 从文件加载谜题
+gosudoku        从标准输入获取谜题
 
 `
 
 func main() {
 	flag.CommandLine.Usage = func() {
-		fmt.Fprintf(os.Stderr, MsgUsage)
+		fmt.Fprint(os.Stderr, MsgUsage)
 		flag.CommandLine.PrintDefaults()
 	}
 	flag.Parse()
@@ -73,7 +72,7 @@ func loadPuzzle() string {
 		input = f
 	}
 
-	raw, err := ioutil.ReadAll(io.LimitReader(input, 1024))
+	raw, err := io.ReadAll(io.LimitReader(input, 1024))
 	if err != nil {
 		panic(err)
 	}

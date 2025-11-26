@@ -112,7 +112,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 				if !*flagShowOnlyResult {
 					title := ""
 					if cellNumExcludes == 8 {
-						title += fmt.Sprintf("单元格唯一可以填的数\n")
+						title += "单元格唯一可以填的数\n"
 					}
 					if rowExcludes == 8 {
 						title += fmt.Sprintf("该行唯一可以填 %d 的位置\n", rcn.Num+1)

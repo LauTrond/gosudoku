@@ -6,7 +6,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
@@ -17,7 +16,7 @@ import (
 )
 
 const (
-	pprofOutput = "output/pprof"
+	pprofOutput   = "output/pprof"
 	pprofDuration = time.Minute
 )
 
@@ -34,7 +33,7 @@ func TestCPUProfile(t *testing.T) {
 
 	*flagShowOnlyResult = true
 
-	hardest, err := ioutil.ReadFile("assets/hardest_1106.txt")
+	hardest, err := os.ReadFile("assets/hardest_1106.txt")
 	if err != nil {
 		panic(err)
 	}

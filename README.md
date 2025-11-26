@@ -8,7 +8,7 @@
 
 试试：
 
-    $ go get github.com/LauTrond/sudoku
+    $ go get github.com/LauTrond/gosudoku
     $ echo "
     ...7.....
     1........
@@ -19,7 +19,7 @@
     ....81...
     ..2....5.
     .4....3..
-    " | go run github.com/LauTrond/sudoku
+    " | go run github.com/LauTrond/gosudoku
     
     =============================
     <17> 开始
@@ -81,19 +81,19 @@
 
 谜题写在txt文件中，可以作为参数来运行：
 
-    $ cd $GOPATH/src/github.com/LauTrond/sudoku
+    $ cd $GOPATH/src/github.com/LauTrond/gosudoku
     $ go run . puzzles/simple-01.txt
 
 使用 -h 参数显示命令选项：
 
-    $ cd $GOPATH/src/github.com/LauTrond/sudoku
+    $ cd $GOPATH/src/github.com/LauTrond/gosudoku
     $ go run . -h
 
 使用 -b 参数可以显示运算耗时（不包含程序启动、输入输出时间）。
 一般难度谜题，如17线索的 puzzles/simple-01.txt 可以在100微妙内完成。
 puzzles/hard-02.txt 是某个新闻号称"最难的数独"，本项目找到唯一解的耗时小于1毫秒：
 
-    $ cd $GOPATH/src/github.com/LauTrond/sudoku
+    $ cd $GOPATH/src/github.com/LauTrond/gosudoku
     $ cat puzzles/hard-02.txt
     8........
     ..36.....
