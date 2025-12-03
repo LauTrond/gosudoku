@@ -8,86 +8,99 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
-func Test17Clue(t *testing.T) {
+func Test17Clue_ST(t *testing.T) {
 	(&BenchmarkConfig{
-		InputFile: "assets/17_clue.txt",
+		InputFile:  "assets/17_clue.txt",
 		OutputFile: "output/17_clue.txt",
 	}).Run(t)
 }
 
 func Test17Clue_MT(t *testing.T) {
 	(&BenchmarkConfig{
-		InputFile: "assets/17_clue.txt",
+		InputFile:  "assets/17_clue.txt",
 		OutputFile: "output/17_clue.txt",
-		Parallel: runtime.NumCPU(),
+		Parallel:   runtime.NumCPU(),
 	}).Run(t)
 }
 
-func TestHardest1905_11(t *testing.T) {
+func TestHardest1905_ST_NoRules(t *testing.T) {
 	(&BenchmarkConfig{
-		InputFile: "assets/hardest_1905_11.txt",
-		OutputFile: "output/hardest_1905_11.txt",
+		InputFile:   "assets/hardest_1905_11.txt",
+		OutputFile:  "output/hardest_1905_11.txt",
+		EnableRules: false,
+		// go tool pprof -http=:5001 output/hardest1905_norules.pprof
+		PprofFile: "output/hardest1905_norules.pprof",
+	}).Run(t)
+}
+func TestHardest1905_ST_Rules(t *testing.T) {
+	(&BenchmarkConfig{
+		InputFile:   "assets/hardest_1905_11.txt",
+		OutputFile:  "output/hardest_1905_11.txt",
+		EnableRules: true,
+		// go tool pprof -http=:5002 output/hardest1905_rules.pprof
+		PprofFile: "output/hardest1905_rules.pprof",
 	}).Run(t)
 }
 
 func TestHardest1905_11_MT(t *testing.T) {
 	(&BenchmarkConfig{
-		InputFile: "assets/hardest_1905_11.txt",
+		InputFile:  "assets/hardest_1905_11.txt",
 		OutputFile: "output/hardest_1905_11.txt",
-		Parallel: runtime.NumCPU(),
+		Parallel:   runtime.NumCPU(),
 	}).Run(t)
 }
 
-func TestHardest1106(t *testing.T) {
+func TestHardest1106_ST(t *testing.T) {
 	(&BenchmarkConfig{
-		InputFile: "assets/hardest_1106.txt",
+		InputFile:  "assets/hardest_1106.txt",
 		OutputFile: "output/hardest_1106.txt",
 	}).Run(t)
 }
 
 func TestHardest1106_MT(t *testing.T) {
 	(&BenchmarkConfig{
-		InputFile: "assets/hardest_1106.txt",
+		InputFile:  "assets/hardest_1106.txt",
 		OutputFile: "output/hardest_1106.txt",
-		Parallel: runtime.NumCPU(),
+		Parallel:   runtime.NumCPU(),
 	}).Run(t)
 }
 
 type BenchmarkConfig struct {
-	Parallel int
-	InputFile string
-	OutputFile string
-	OverwriteOutputFile bool
-	StopAtFirstSolution bool
+	Parallel        int
+	InputFile       string
+	OutputFile      string
+	OverwriteOutput bool
+	PprofFile       string
+	EnableRules     bool
 }
 
 func (cfg *BenchmarkConfig) Run(t *testing.T) {
 	if cfg.Parallel < 1 {
 		cfg.Parallel = 1
 	}
-
-	runtime.GOMAXPROCS(cfg.Parallel + 2)
 	check := func(err error) {
 		if err != nil {
 			panic(err)
 		}
 	}
 
-	*flagShowOnlyResult = true
-	*flagStopAtFirstSolution = cfg.StopAtFirstSolution
+	*flagEnableBlockSlice = cfg.EnableRules
+	*flagEnableExplicitPairs = cfg.EnableRules
+	*flagEnableHiddenPairs = cfg.EnableRules
+	*flagEnableXWing = cfg.EnableRules
 
-	input, err := os.Open(cfg.InputFile)
+	inputData, err := os.ReadFile(cfg.InputFile)
 	check(err)
-	defer input.Close()
-	br := bufio.NewReader(input)
+	br := bufio.NewReader(bytes.NewReader(inputData))
 
-	if !cfg.OverwriteOutputFile {
+	if !cfg.OverwriteOutput {
 		if _, err = os.Stat(cfg.OutputFile); err == nil {
 			//outputFile exists
 			fmt.Printf("%s 文件已经存在，屏蔽输出\n", cfg.OutputFile)
@@ -95,28 +108,33 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 		}
 	}
 
-	var output *os.File
+	var output io.Writer
 	if cfg.OutputFile != "" {
 		outputDir := filepath.Dir(cfg.OutputFile)
 		outputTmp := "." + filepath.Base(cfg.OutputFile) + ".tmp"
 		outputTmpPath := filepath.Join(outputDir, outputTmp)
 		err = os.MkdirAll(outputDir, 0755)
 		check(err)
-		output, err = os.Create(outputTmpPath)
+		f, err := os.Create(outputTmpPath)
 		check(err)
 		defer func() {
-			err := output.Close()
+			err := f.Close()
 			check(err)
 			err = os.Rename(outputTmpPath, cfg.OutputFile)
 			check(err)
 		}()
+		output = f
 	} else {
-		output, err = os.Create(os.DevNull)
+		output = io.Discard
+	}
+
+	if cfg.PprofFile != "" {
+		pf, err := os.Create(cfg.PprofFile)
 		check(err)
-		defer func() {
-			err := output.Close()
-			check(err)
-		}()
+		defer pf.Close()
+		err = pprof.StartCPUProfile(pf)
+		check(err)
+		defer pprof.StopCPUProfile()
 	}
 
 	var mtx sync.Mutex
@@ -126,14 +144,11 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 	succCount := 0
 
 	startTime := time.Now()
-	outputFilePrint := cfg.OutputFile
-	if outputFilePrint == "" {
-		outputFilePrint = "<无>"
-	}
 	printNamedValue("测试集", "%s", cfg.InputFile)
-	printNamedValue("输出文件","%s", outputFilePrint)
-	printNamedValue("线程数","%d", cfg.Parallel)
-	printNamedValue("启动时间","%s", startTime.Format("2006-01-02 15:04:05"))
+	printNamedValue("输出文件", "%s", cfg.OutputFile)
+	printNamedValue("CPU统计文件", "%s", cfg.PprofFile)
+	printNamedValue("线程数", "%d", cfg.Parallel)
+	printNamedValue("启动时间", "%s", startTime.Format("2006-01-02 15:04:05"))
 
 	getLine := func() ([]byte, bool) {
 		for {
@@ -230,10 +245,10 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 	dur := time.Since(startTime)
 	printNamedValue("总耗时(s)", "%.3f", dur.Seconds())
 	printNamedValue("总局数", "%d", puzzlesCount)
-	printNamedValue("唯一解局数","%d", succCount)
-	printNamedValue("解题速率(局/s)","%.2f", float64(puzzlesCount)/dur.Seconds())
-	printNamedValue("分支数","%d", guessesCount)
-	printNamedValue("分支率(次/局)","%.2f", float64(guessesCount)/float64(puzzlesCount))
+	printNamedValue("唯一解局数", "%d", succCount)
+	printNamedValue("解题速率(局/s)", "%.2f", float64(puzzlesCount)/dur.Seconds())
+	printNamedValue("分支数", "%d", guessesCount)
+	printNamedValue("分支率(次/局)", "%.2f", float64(guessesCount)/float64(puzzlesCount))
 	printNamedValue("总演算次数", "%d", evalCount)
 }
 

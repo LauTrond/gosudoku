@@ -9,11 +9,15 @@ import (
 )
 
 var (
-	flagShowOnlyResult      = flag.Bool("result", false, "不显示中间步骤，只显示解")
+	flagShowProcess         = flag.Bool("process", false, "显示中间计算步骤")
 	flagStopAtFirstSolution = flag.Bool("one", false, "找到一个解即停止")
 	flagShowStat            = flag.Bool("stat", false, "显示运算统计信息")
 	flagShowBranch          = flag.Bool("branch", false, "显示分支结构")
-	flagBenchmark           = flag.Bool("b", false, "(Benchmark)相当于 -result -one -stat 组合")
+	flagEnableBlockSlice    = flag.Bool("blockslice", true, "启用 宫区数组 排除规则")
+	flagEnableExplicitPairs = flag.Bool("explicitpairs", true, "启用 显性数对 排除规则")
+	flagEnableHiddenPairs   = flag.Bool("hiddenpairs", true, "启用 隐性数对 排除规则")
+	flagEnableXWing         = flag.Bool("xwing", true, "启用 X-Wing 排除规则")
+	flagDisableRules        = flag.Bool("norules", false, "禁用所有高级排除规则, 等同于 -blockslice=false -explicitpairs=false -hiddenpairs=false -xwing=false")
 )
 
 const MsgUsage = `使用方法：
@@ -29,16 +33,18 @@ func main() {
 		flag.CommandLine.PrintDefaults()
 	}
 	flag.Parse()
-	if *flagBenchmark {
-		*flagShowOnlyResult = true
-		*flagStopAtFirstSolution = true
-		*flagShowStat = true
+
+	if *flagDisableRules {
+		*flagEnableBlockSlice = false
+		*flagEnableExplicitPairs = false
+		*flagEnableHiddenPairs = false
+		*flagEnableXWing = false
 	}
 
 	puzzle := loadPuzzle()
 	s, t := ParseSituation(puzzle)
 
-	if !*flagShowOnlyResult {
+	if *flagShowProcess {
 		s.Show("开始", -1, -1)
 	}
 
@@ -56,7 +62,8 @@ func main() {
 	}
 	if *flagShowStat {
 		fmt.Printf("总耗时：%v\n", dur)
-		fmt.Printf("总猜次数：%d\n", ctx.guessesCount)
+		fmt.Printf("总分支数：%d\n", ctx.guessesCount)
+		fmt.Printf("总演算次数 %d\n", ctx.evalCount)
 	}
 }
 

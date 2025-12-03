@@ -20,6 +20,18 @@ var (
 	}
 )
 
+func RCtoBP(r, c int) (b int, p int) {
+	b = r/3*3 + c/3
+	p = r%3*3 + c%3
+	return
+}
+
+func BPtoRC(b, p int) (r int, c int) {
+	r = b/3*3 + p/3
+	c = b%3*3 + p%3
+	return
+}
+
 // Situation 代表9*9数独的一个局势
 // 所有行、列、单元格值都是0~8，显示的时候加1处理。
 type Situation struct {
@@ -33,9 +45,18 @@ type Situation struct {
 
 	//numSetCount[n] = x ： n 已填充 x 次
 	numSetCount [9]int8
+	//rowSetCount[r] = x ： r 行已填充 x 个数
+	rowSetCount [9]int8
+	//colSetCount[c] = x ： c 列已填充 x 个数
+	colSetCount [9]int8
+	//blockSetCount[b] = x ： 宫 b 已填充 x 个数
+	blockSetCount [9]int8
 
 	//cellExclude[n][r][c] = 1 ： 单元格(r,c)排除n
 	cellExclude [9][9][9]int8
+
+	//cellExcludeBits[r][c] 的每一位代表该单元格排除了哪些数字
+	cellExcludeBits [9][9]int16
 
 	//numExcludes[n] ： n 的总排除次数
 	numExcludes [9]int8
@@ -48,7 +69,11 @@ type Situation struct {
 	//等于 sum(cellExclude[n][r][...])
 	rowExcludes [9][9]int8
 
-	//
+	//rowExcludeBits[n][r] 的每一位代表 r 行排除了哪些单元格
+	rowExcludeBits [9][9]int16
+
+	//rowSumExcludes[r] = x ： r 行总共排除了 x 种可能性
+	//rowSumExcludes[r] = sum(rowExcludes[...][r])
 	rowSumExcludes [9]int8
 
 	//rowExcludes[n][r][C] = x ： 第 r 行 C 宫的 n 排除了 x 个单元格
@@ -59,17 +84,26 @@ type Situation struct {
 	//colExcludes[n][c] = sum(cellExclude[n][...][c])
 	colExcludes [9][9]int8
 
-	//
+	//colExcludeBits[n][c] 的每一位代表 c 列排除了哪些单元格
+	colExcludeBits [9][9]int16
+
+	//colSumExcludes[c] = x ： c 列总共排除了 x 种可能性
+	//colSumExcludes[c] = sum(colExcludes[...][c])
 	colSumExcludes [9]int8
 
 	//colSliceExcludes[n][R][c] = x ： c 列 R 宫的 n 排除了 x 个单元格
 	//colSliceExcludes[n][R][c] = sum(cellExclude[n][R*3..R*3+2][c])
 	colSliceExcludes [9][3][9]int8
 
-	//blockExcludes[n][R][C] = x ：宫 (R,C) 的 n 排除了 x 个单元格
-	blockExcludes [9][3][3]int8
+	//blockExcludes[n][b] = x ：宫 b 的 n 排除了 x 个单元格
+	blockExcludes [9][9]int8
 
-	blockSumExcludes [3][3]int8
+	//blockExcludeBits[n][b] 的每一位代表 宫 b 排除了哪些单元格
+	blockExcludeBits [9][9]int16
+
+	//blockSumExcludes[b] = x ： 宫 b 总共排除了 x 种可能性
+	//blockSumExcludes[b] = sum(blockExcludes[...][b])
+	blockSumExcludes [9]int8
 
 	//分支代数，每执行一次Copy就加1
 	branchGeneration int
@@ -148,59 +182,106 @@ func (s *Situation) Count() int {
 	return s.setCount
 }
 
-//填数
+// 填数
 func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	r, c, n := rcn.Extract()
 	if s.cells[r][c] != -1 {
 		return false
 	}
 
+	b, p := RCtoBP(r, c)
 	R, C := r/3, c/3
 	s.setCount++
 	s.numSetCount[n]++
+	s.rowSetCount[r]++
+	s.colSetCount[c]++
+	s.blockSetCount[b]++
 	s.cells[r][c] = int8(n)
 
-	for n0 := range loop9 {
-		if n0 != n {
-			s.Exclude(t, RCN(r, c, n0))
-		}
-	}
-	for _, r0 := range loop9skip[R] {
-		s.Exclude(t, RCN(r0, c, n))
-	}
-	for _, c0 := range loop9skip[C] {
-		s.Exclude(t, RCN(r, c0, n))
-	}
-	for rr0 := range loop3 {
-		for cc0 := range loop3 {
-			r0 := R*3 + rr0
-			c0 := C*3 + cc0
-			if r0 != r || c0 != c {
-				s.Exclude(t, RCN(r0, c0, n))
+	if s.cellNumExcludes[r][c] < 8 {
+		for n0 := range loop9 {
+			if n0 != n {
+				s.checkEnqueueExclude(t, RCN(r, c, n0))
 			}
 		}
 	}
+	if s.colExcludes[n][c] < 8 {
+		for _, r0 := range loop9skip[R] {
+			s.checkEnqueueExclude(t, RCN(r0, c, n))
+		}
+	}
+	if s.rowExcludes[n][r] < 8 {
+		for _, c0 := range loop9skip[C] {
+			s.checkEnqueueExclude(t, RCN(r, c0, n))
+		}
+	}
+	if s.blockExcludes[n][b] < 8 {
+		for p0 := range loop9 {
+			if p0 == p {
+				continue
+			}
+			r0, c0 := BPtoRC(b, p0)
+			s.checkEnqueueExclude(t, RCN(r0, c0, n))
+		}
+	}
+	s.drainExcludeQueue(t)
 	return true
 }
 
-func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
+func (s *Situation) Exclude(t *Trigger, rcn RowColNum) {
+	s.checkEnqueueExclude(t, rcn)
+	s.drainExcludeQueue(t)
+}
+
+func (s *Situation) drainExcludeQueue(t *Trigger) {
+	for {
+		next, ok := t.DequeueExclude()
+		if !ok {
+			break
+		}
+		s.excludeOne(t, next)
+		if len(t.Conflicts) > 0 {
+			break
+		}
+	}
+}
+
+func (s *Situation) checkEnqueueExclude(t *Trigger, rcn RowColNum) bool {
 	r, c, n := rcn.Extract()
-	if s.cellExclude[n][r][c] != 0 {
+	if s.cellExclude[n][r][c] > 0 {
+		return false
+	}
+	t.EnqueueExclude(rcn)
+	return true
+}
+
+func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
+	r, c, n := rcn.Extract()
+	if s.cellExclude[n][r][c] > 0 {
 		return false
 	}
 	s.cellExclude[n][r][c] = 1
 
+	b, p := RCtoBP(r, c)
 	R, C := r/3, c/3
 	rr, cc := r-R*3, c-C*3
 
+	s.cellExcludeBits[r][c] |= 1 << n
+	cellExcludeBits := s.cellExcludeBits[r][c]
 	_ = add(&s.numExcludes[n], 1)
 	cellNumExcludes := add(&s.cellNumExcludes[r][c], 1)
 	rowExcludes := add(&s.rowExcludes[n][r], 1)
+	s.rowExcludeBits[n][r] |= 1 << c
+	rowExcludeBits := s.rowExcludeBits[n][r]
 	_ = add(&s.rowSumExcludes[r], 1)
 	colExcludes := add(&s.colExcludes[n][c], 1)
+	s.colExcludeBits[n][c] |= 1 << r
+	colExcludeBits := s.colExcludeBits[n][c]
 	_ = add(&s.colSumExcludes[c], 1)
-	blockExcludes := add(&s.blockExcludes[n][R][C], 1)
-	_ = add(&s.blockSumExcludes[R][C], 1)
+	blockExcludes := add(&s.blockExcludes[n][b], 1)
+	s.blockExcludeBits[n][b] |= 1 << (rr*3 + cc)
+	blockExcludeBits := s.blockExcludeBits[n][b]
+	_ = add(&s.blockSumExcludes[b], 1)
 	rowSliceExcludes := add(&s.rowSliceExcludes[n][r][C], 1)
 	colSliceExcludes := add(&s.colSliceExcludes[n][R][c], 1)
 
@@ -217,7 +298,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		}
 	case 9:
 		reason := ""
-		if !*flagShowOnlyResult {
+		if *flagShowProcess {
 			reason = fmt.Sprintf("单元格(%d,%d)没有可填充数字", r+1, c+1)
 		}
 		t.Conflict(reason)
@@ -233,7 +314,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		}
 	case 9:
 		reason := ""
-		if !*flagShowOnlyResult {
+		if *flagShowProcess {
 			reason = fmt.Sprintf("第 %d 行没有单元格可填充 %d", r+1, n+1)
 		}
 		t.Conflict(reason)
@@ -249,7 +330,7 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 		}
 	case 9:
 		reason := ""
-		if !*flagShowOnlyResult {
+		if *flagShowProcess {
 			reason = fmt.Sprintf("第 %d 列没有单元格可填充 %d", c+1, n+1)
 		}
 		t.Conflict(reason)
@@ -258,62 +339,288 @@ func (s *Situation) Exclude(t *Trigger, rcn RowColNum) bool {
 	switch blockExcludes {
 	case 8:
 	loopRow:
-		for r0 := range loop3 {
-			for c0 := range loop3 {
-				if s.cellExclude[n][R*3+r0][C*3+c0] == 0 && s.cells[R*3+r0][C*3+c0] < 0 {
-					t.Confirm(RCN(R*3+r0, C*3+c0, n))
-					break loopRow
-				}
+		for p0 := range loop9 {
+			r0, c0 := BPtoRC(b, p0)
+			if s.cellExclude[n][r0][c0] == 0 && s.cells[r0][c0] < 0 {
+				t.Confirm(RCN(r0, c0, n))
+				break loopRow
 			}
 		}
 	case 9:
 		reason := ""
-		if !*flagShowOnlyResult {
+		if *flagShowProcess {
 			reason = fmt.Sprintf("宫(%d,%d)没有单元格可填充 %d", R+1, C+1, n+1)
 		}
 		t.Conflict(reason)
 	}
 
-	if rowExcludes == 6 || rowExcludes == 7 {
-		for _, C0 := range loop3skip[C] {
-			C1 := 3 - C - C0
-			if rowSliceExcludes+s.rowSliceExcludes[n][r][C0] == 6 {
-				for _, rr1 := range loop3skip[rr] {
-					for cc1 := range loop3 {
-						s.Exclude(t, RCN(R*3+rr1, C1*3+cc1, n))
+	// 宫区数对 and 宫区三数组
+	// 同一宫区内，某数字只能出现在同一行或同一列的2个或3个单元格中
+	// https://sudoku.com/zh/shu-du-gui-ze/gong-qu-kuai-shu-dui/
+	if *flagEnableBlockSlice {
+		if rowExcludes == 6 || rowExcludes == 7 {
+			for _, C0 := range loop3skip[C] {
+				C1 := 3 - C - C0
+				if rowSliceExcludes+s.rowSliceExcludes[n][r][C0] == 6 {
+					for _, rr1 := range loop3skip[rr] {
+						for cc1 := range loop3 {
+							s.checkEnqueueExclude(t, RCN(R*3+rr1, C1*3+cc1, n))
+						}
+					}
+				}
+			}
+		}
+
+		if colExcludes == 6 || colExcludes == 7 {
+			for _, R0 := range loop3skip[R] {
+				R1 := 3 - R - R0
+				if colSliceExcludes+s.colSliceExcludes[n][R0][c] == 6 {
+					for rr1 := range loop3 {
+						for _, cc1 := range loop3skip[cc] {
+							s.checkEnqueueExclude(t, RCN(R1*3+rr1, C*3+cc1, n))
+						}
+					}
+				}
+			}
+		}
+
+		if blockExcludes == 6 || blockExcludes == 7 {
+			for _, rr0 := range loop3skip[rr] {
+				rr1 := 3 - rr - rr0
+				if rowSliceExcludes+s.rowSliceExcludes[n][R*3+rr0][C] == 6 {
+					for _, c0 := range loop9skip[C] {
+						s.checkEnqueueExclude(t, RCN(R*3+rr1, c0, n))
+					}
+				}
+			}
+			for _, cc0 := range loop3skip[cc] {
+				cc1 := 3 - cc - cc0
+				if colSliceExcludes+s.colSliceExcludes[n][R][C*3+cc0] == 6 {
+					for _, r0 := range loop9skip[R] {
+						s.checkEnqueueExclude(t, RCN(r0, C*3+cc1, n))
 					}
 				}
 			}
 		}
 	}
 
-	if colExcludes == 6 || colExcludes == 7 {
-		for _, R0 := range loop3skip[R] {
-			R1 := 3 - R - R0
-			if colSliceExcludes+s.colSliceExcludes[n][R0][c] == 6 {
-				for rr1 := range loop3 {
-					for _, cc1 := range loop3skip[cc] {
-						s.Exclude(t, RCN(R1*3+rr1, C*3+cc1, n))
+	// 显性数对
+	// 同一行、列、宫中，两个单元格只能填入同样的两个数字，可以排除其他单元格填入这两个数字的可能性
+	// https://sudoku.com/zh/shu-du-gui-ze/xian-xing-shu-dui/
+	if *flagEnableExplicitPairs {
+		if cellNumExcludes == 7 {
+			foundRow := -1
+			for r0 := range loop9 {
+				if r0 != r && cellExcludeBits == s.cellExcludeBits[r0][c] {
+					foundRow = r0
+					break
+				}
+			}
+			if foundRow >= 0 {
+				// (r,c) 和 (foundRow,c) 形成显性数对
+				for n0 := range loop9 {
+					if cellExcludeBits&(1<<n0) > 0 {
+						continue
+					}
+					if s.colExcludes[n0][c] >= 7 {
+						continue
+					}
+					for r1 := range loop9 {
+						if r1 != r && r1 != foundRow {
+							s.checkEnqueueExclude(t, RCN(r1, c, n0))
+						}
+					}
+				}
+			}
+
+			foundCol := -1
+			for c0 := range loop9 {
+				if c0 != c && cellExcludeBits == s.cellExcludeBits[r][c0] {
+					foundCol = c0
+					break
+				}
+			}
+			if foundCol >= 0 {
+				// (r,c) 和 (r,foundCol) 形成显性数对
+				for n0 := range loop9 {
+					if cellExcludeBits&(1<<n0) > 0 {
+						continue
+					}
+					if s.rowExcludes[n0][r] >= 7 {
+						continue
+					}
+					for c1 := range loop9 {
+						if c1 != c && c1 != foundCol {
+							s.checkEnqueueExclude(t, RCN(r, c1, n0))
+						}
+					}
+				}
+			}
+
+			foundPos := -1
+			for p0 := range loop9 {
+				if p0 == p {
+					continue
+				}
+				r0, c0 := BPtoRC(b, p0)
+				if cellExcludeBits == s.cellExcludeBits[r0][c0] {
+					foundPos = p0
+					break
+				}
+			}
+			if foundPos >= 0 {
+				// (b,p) 和 (b,foundPos) 形成显性数对
+				for n0 := range loop9 {
+					if cellExcludeBits&(1<<n0) > 0 {
+						continue
+					}
+					if s.blockExcludes[n0][b] >= 7 {
+						continue
+					}
+					for p1 := range loop9 {
+						if p1 != p && p1 != foundPos {
+							r1, c1 := BPtoRC(b, p1)
+							s.checkEnqueueExclude(t, RCN(r1, c1, n0))
+						}
 					}
 				}
 			}
 		}
 	}
 
-	if blockExcludes == 6 || blockExcludes == 7 {
-		for _, rr0 := range loop3skip[rr] {
-			rr1 := 3 - rr - rr0
-			if rowSliceExcludes+s.rowSliceExcludes[n][R*3+rr0][C] == 6 {
-				for _, c0 := range loop9skip[C] {
-					s.Exclude(t, RCN(R*3+rr1, c0, n))
+	// 隐性数对
+	// 同一行、列、宫中，两个数字只能填入同样的两个单元格，可以排除其他数字在这两单元格的可能性
+	// https://sudoku.com/zh/shu-du-gui-ze/yin-xing-shu-dui/
+	if *flagEnableHiddenPairs {
+		if rowExcludes == 7 {
+			foundNum := -1
+			for n0 := range loop9 {
+				if n0 != n && rowExcludeBits == s.rowExcludeBits[n0][r] {
+					foundNum = n0
+					break
+				}
+			}
+			if foundNum >= 0 {
+				// n 和 foundNum 形成隐性数对
+				for c0 := range loop9 {
+					if rowExcludeBits&(1<<c0) > 0 {
+						continue
+					}
+					if s.cellNumExcludes[r][c0] >= 7 {
+						continue
+					}
+					for n1 := range loop9 {
+						if n1 != n && n1 != foundNum {
+							s.checkEnqueueExclude(t, RCN(r, c0, n1))
+						}
+					}
 				}
 			}
 		}
-		for _, cc0 := range loop3skip[cc] {
-			cc1 := 3 - cc - cc0
-			if colSliceExcludes+s.colSliceExcludes[n][R][C*3+cc0] == 6 {
-				for _, r0 := range loop9skip[R] {
-					s.Exclude(t, RCN(r0, C*3+cc1, n))
+		if colExcludes == 7 {
+			foundNum := -1
+			for n0 := range loop9 {
+				if n0 != n && colExcludeBits == s.colExcludeBits[n0][c] {
+					foundNum = n0
+					break
+				}
+			}
+			if foundNum >= 0 {
+				// n 和 foundNum 形成隐性数对，可以排除其他数字在该列的这两单元格的可能性
+				for r0 := range loop9 {
+					if colExcludeBits&(1<<r0) > 0 {
+						continue
+					}
+					if s.cellNumExcludes[r0][c] >= 7 {
+						continue
+					}
+					for n1 := range loop9 {
+						if n1 != n && n1 != foundNum {
+							s.checkEnqueueExclude(t, RCN(r0, c, n1))
+						}
+					}
+				}
+			}
+		}
+		if blockExcludes == 7 {
+			foundNum := -1
+			for n0 := range loop9 {
+				if n0 != n && blockExcludeBits == s.blockExcludeBits[n0][b] {
+					foundNum = n0
+					break
+				}
+			}
+			if foundNum >= 0 {
+				// n 和 foundNum 形成隐性数对，可以排除其他数字在该宫的这两单元格的可能性
+				for p0 := range loop9 {
+					if blockExcludeBits&(1<<p0) > 0 {
+						continue
+					}
+					r0, c0 := BPtoRC(b, p0)
+					if s.cellNumExcludes[r0][c0] >= 7 {
+						continue
+					}
+					for n1 := range loop9 {
+						if n1 != n && n1 != foundNum {
+							s.checkEnqueueExclude(t, RCN(r0, c0, n1))
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// X-Wing
+	// 同一数字，在两行（或两列）中有相同的 2 个候选单元格
+	// https://sudoku.com/zh/shu-du-gui-ze/x-yi-jie-fa/
+	if *flagEnableXWing {
+		if rowExcludes == 7 {
+			foundRow := -1
+			for r0 := range loop9 {
+				if r0 != r && rowExcludeBits == s.rowExcludeBits[n][r0] {
+					foundRow = r0
+					break
+				}
+			}
+			if foundRow >= 0 {
+				// r 和 foundRow 形成 X-Wing，可以排除其他行的 n 在这两列的可能性
+				for c0 := range loop9 {
+					if rowExcludeBits&(1<<c0) > 0 {
+						continue
+					}
+					if s.colExcludes[n][c0] >= 7 {
+						continue
+					}
+					for r1 := range loop9 {
+						if r1 != r && r1 != foundRow {
+							s.checkEnqueueExclude(t, RCN(r1, c0, n))
+						}
+					}
+				}
+			}
+		}
+		if colExcludes == 7 {
+			foundCol := -1
+			for c0 := range loop9 {
+				if c0 != c && colExcludeBits == s.colExcludeBits[n][c0] {
+					foundCol = c0
+					break
+				}
+			}
+			if foundCol >= 0 {
+				// c 和 foundCol 形成 X-Wing，可以排除其他列的 n 在这两行的可能性
+				for r0 := range loop9 {
+					if colExcludeBits&(1<<r0) > 0 {
+						continue
+					}
+					if s.rowExcludes[n][r0] >= 7 {
+						continue
+					}
+					for c1 := range loop9 {
+						if c1 != c && c1 != foundCol {
+							s.checkEnqueueExclude(t, RCN(r0, c1, n))
+						}
+					}
 				}
 			}
 		}
@@ -342,65 +649,128 @@ func init() {
 	}
 }
 
-func (s *Situation) ChooseGuessingCell() GuessItem {
-	type cellInfo struct {
-		row, col    int
-		excludeNums int
-		sumExcludes int
+func (s *Situation) ChooseGuessingCell1() []RowColNum {
+	type Candidate struct {
+		RowCol
+		// numCd, rowCd, colCd, blockCd int
+		Score int64
 	}
-	selected := cellInfo{
-		excludeNums: -1,
+	selected := Candidate{
+		RowCol: RowCol{-1, -1},
+		Score:  1 << 30,
 	}
 
-	isBetter := func(candidate cellInfo) bool {
-		if candidate.excludeNums != selected.excludeNums {
-			return candidate.excludeNums > selected.excludeNums
+	isBetter := func(candidate Candidate) bool {
+		if candidate.Score != selected.Score {
+			return candidate.Score < selected.Score
 		}
-		if candidate.sumExcludes != selected.sumExcludes {
-			return candidate.sumExcludes < selected.sumExcludes
-		}
-		return RowColHash[candidate.row][candidate.col] <
-			RowColHash[selected.row][selected.col]
+		return RowColHash[candidate.Row][candidate.Col] <
+			RowColHash[selected.Row][selected.Col]
 	}
 	for r := range loop9 {
 		for c := range loop9 {
+			b, _ := RCtoBP(r, c)
 			if s.cellNumExcludes[r][c] >= 8 {
 				continue
 			}
-			candidate := cellInfo{
-				row:         r,
-				col:         c,
-				excludeNums: int(s.cellNumExcludes[r][c]),
-				sumExcludes: int(s.rowSumExcludes[r] +
-					s.colSumExcludes[c] +
-					s.blockSumExcludes[r/3][c/3]),
+			exNum := int64(9 - s.cellNumExcludes[r][c])
+			exRow := int64(9 - s.rowSumExcludes[r])
+			exCol := int64(9 - s.colSumExcludes[c])
+			exBlock := int64(9 - s.blockSumExcludes[b])
+			// setRow := int64(9 - s.rowSetCount[r])
+			// setCol := int64(9 - s.colSetCount[c])
+			// setBlock := int64(9 - s.blockSetCount[r/3][c/3])
+
+			candidate := Candidate{
+				RowCol: RowCol{r, c},
+				Score:  1,
 			}
+			// candidate.Score = (exNum << 20) - exRow - exCol - exBlock //72306689
+			candidate.Score = (exNum << 20) - exRow*exCol*exBlock //71240920 best
+			// candidate.Score = (exNum << 20) - setRow - setCol - setBlock //75853735
+			// candidate.Score = (exNum << 20) - setRow*setCol*setBlock //78121998
+
 			if isBetter(candidate) {
 				selected = candidate
 			}
 		}
 	}
-	nums := make([]int8, 0, 9-selected.excludeNums)
+	if selected.Row == -1 || selected.Col == -1 {
+		return nil
+	}
+	result := make([]RowColNum, 0, 9-int(s.cellNumExcludes[selected.Row][selected.Col]))
 	for n := range loop9 {
-		if s.cellExclude[n][selected.row][selected.col] == 0 {
-			nums = append(nums, int8(n))
+		if s.cellExclude[n][selected.Row][selected.Col] == 0 {
+			result = append(result, RCN(selected.Row, selected.Col, n))
 		}
 	}
-	sort.Slice(nums, func(i, j int) bool {
-		return s.CompareNumInCell(selected.row, selected.col,
-			int(nums[i]), int(nums[j]))
+	sort.Slice(result, func(i, j int) bool {
+		return s.CompareNumInCell(selected.Row, selected.Col,
+			int(result[i].Num), int(result[j].Num))
 	})
-
-	return GuessItem{
-		RowCol: RowCol{
-			Row: int(selected.row),
-			Col: int(selected.col),
-		},
-		Nums: nums,
-	}
+	return result
 }
 
-//选择哪个号码开始猜测，返回true表示n1比较好
+func (s *Situation) ChooseGuessingCell2() []RowColNum {
+	type Candidate struct {
+		RowColNum
+		Score int64
+	}
+	selected := Candidate{
+		RowColNum: RCN(-1, -1, -1),
+		Score:     1 << 30,
+	}
+	isBetter := func(candidate Candidate) bool {
+		if candidate.Score != selected.Score {
+			return candidate.Score < selected.Score
+		}
+		return RowColHash[candidate.Row][candidate.Col] <
+			RowColHash[selected.Row][selected.Col]
+	}
+	for r := range loop9 {
+		for c := range loop9 {
+			b, _ := RCtoBP(r, c)
+			if s.cellNumExcludes[r][c] >= 8 {
+				continue
+			}
+			exNum := int64(9 - s.cellNumExcludes[r][c])
+			setRow := int64(9 - s.rowSetCount[r])
+			setCol := int64(9 - s.colSetCount[c])
+			setBlock := int64(9 - s.blockSetCount[b])
+			preScore := (exNum << 20) - setRow - setCol - setBlock
+			for n := range loop9 {
+				if s.cellExclude[n][r][c] > 0 {
+					continue
+				}
+				//exRow := int64(9 - s.rowExcludes[n][r])
+				//exCol := int64(9 - s.colExcludes[n][c])
+				//exBlock := int64(9 - s.blockExcludes[n][r/3][c/3])
+				setNum := int64(9 - s.numSetCount[n])
+				candidate := Candidate{
+					RowColNum: RCN(r, c, n),
+					Score:     preScore - setNum,
+				}
+				// 分支选择算法
+				// candidate.Score = exNum //80950206
+				// candidate.Score = (exNum << 20) - setNum*setRow*setCol*setBlock //72411336
+				// candidate.Score = (exNum << 20) - setNum - setRow - setCol - setBlock //69618934 best
+				// candidate.Score = (exNum << 20) - exRow*exCol*exBlock  //78630798
+				// candidate.Score = (exNum << 20) - exRow - exCol - exBlock //76996398
+				// candidate.Score = (exNum << 20) - exRow*exCol*exBlock*setNum*setRow*setCol*setBlock
+
+				if isBetter(candidate) {
+					selected = candidate
+				}
+			}
+		}
+	}
+	if selected.Row == -1 {
+		return nil
+	}
+	return []RowColNum{selected.RowColNum}
+}
+
+// 选择哪个号码开始猜测，返回true表示n1比较好
 func (s *Situation) CompareNumInCell(r, c, n1, n2 int) bool {
 	//我也不知道为啥这个指标会有效，只是测试结果表明，这样蒙对的概率更高
 	score1 := int(s.numExcludes[n1])
@@ -497,28 +867,78 @@ func (rcn RowColNum) Extract() (r, c, n int) {
 	return int(rcn.Row), int(rcn.Col), int(rcn.Num)
 }
 
+var triggerPool = sync.Pool{
+	New: func() interface{} {
+		return &Trigger{
+			Confirms: make([]RowColNum, 0, 20),
+			excludes: make([]RowColNum, 100),
+		}
+	},
+}
+
 type Trigger struct {
-	Confirms  []RowColNum
-	Conflicts []string
+	Confirms    []RowColNum
+	excludes    []RowColNum
+	excludeHead int
+	excludeTail int
+	Conflicts   []string
 }
 
 func NewTrigger() *Trigger {
-	return &Trigger{
-		Confirms: make([]RowColNum, 0, 8),
-	}
+	t := triggerPool.Get().(*Trigger)
+	t.Init()
+	return t
 }
 
 func (t *Trigger) Init() {
 	t.Confirms = t.Confirms[:0]
-	t.Conflicts = nil
+	t.excludeHead = 0
+	t.excludeTail = 0
+	t.Conflicts = t.Conflicts[:0]
+}
+
+func (t *Trigger) Release() {
+	triggerPool.Put(t)
 }
 
 func (t *Trigger) Confirm(rcn RowColNum) {
 	t.Confirms = append(t.Confirms, rcn)
 }
 
+func (t *Trigger) EnqueueExclude(rcn RowColNum) {
+	if t.excludeTail-t.excludeHead >= len(t.excludes) {
+		newSize := max(len(t.excludes)*2, 100)
+		newExcludes := make([]RowColNum, newSize)
+		for i := t.excludeHead; i < t.excludeTail; i++ {
+			newExcludes[i-t.excludeHead] = t.excludes[i%len(t.excludes)]
+		}
+		t.excludes = newExcludes
+		t.excludeTail = t.excludeTail - t.excludeHead
+		t.excludeHead = 0
+	}
+	t.excludes[t.excludeTail%len(t.excludes)] = rcn
+	t.excludeTail++
+}
+
+func (t *Trigger) DequeueExclude() (RowColNum, bool) {
+	if t.excludeTail-t.excludeHead > 0 {
+		result := t.excludes[t.excludeHead%len(t.excludes)]
+		t.excludeHead++
+		return result, true
+	} else {
+		return RowColNum{}, false
+	}
+}
+
 func (t *Trigger) Conflict(msg string) {
 	t.Conflicts = append(t.Conflicts, msg)
+}
+
+func (t *Trigger) Copy() *Trigger {
+	t2 := NewTrigger()
+	t2.Confirms = append(t2.Confirms, t.Confirms...)
+	t2.Conflicts = append(t2.Conflicts, t.Conflicts...)
+	return t2
 }
 
 type GuessItem struct {

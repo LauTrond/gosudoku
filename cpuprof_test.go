@@ -17,7 +17,7 @@ import (
 
 const (
 	pprofOutput   = "output/pprof"
-	pprofDuration = time.Minute
+	pprofDuration = time.Second * 30
 )
 
 func TestCPUProfile(t *testing.T) {
@@ -26,12 +26,15 @@ func TestCPUProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, err := os.Create(pprofOutput)
+	fp, err := os.Create(pprofOutput)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer fp.Close()
+	pprof.StartCPUProfile(fp)
+	defer pprof.StopCPUProfile()
 
-	*flagShowOnlyResult = true
+	*flagShowProcess = false
 
 	hardest, err := os.ReadFile("assets/hardest_1106.txt")
 	if err != nil {
@@ -39,7 +42,6 @@ func TestCPUProfile(t *testing.T) {
 	}
 	lines := bytes.Split(hardest, []byte("\n"))
 
-	pprof.StartCPUProfile(f)
 	startTime := time.Now()
 	for time.Since(startTime) < pprofDuration {
 		for _, line := range lines {
@@ -53,7 +55,7 @@ func TestCPUProfile(t *testing.T) {
 			s.Release()
 		}
 	}
-	pprof.StopCPUProfile()
+
 	outputAbs, err := filepath.Abs(pprofOutput)
 	if err != nil {
 		t.Fatal(err)

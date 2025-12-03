@@ -32,7 +32,7 @@ func Test17ClueContest(t *testing.T) {
 		}
 	}
 
-	*flagShowOnlyResult = true
+	*flagShowProcess = false
 	*flagStopAtFirstSolution = true
 
 	runtime.GOMAXPROCS(parallel17Clue)
