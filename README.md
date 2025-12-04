@@ -120,14 +120,14 @@ puzzles/hard-02.txt 是某个新闻号称"最难的数独"，本项目找到唯�
     5  2  1 | 9  7  4 | 3  6  8 
     4  3  8 | 5  2  6 | 9  1  7 
     7  9  6 | 3  1  8 | 4  5  2 
-    总耗时：539.333µs
-    总分支数：62
-    总演算次数 911
+    总耗时：479.084µs
+    总分支数：56
+    总演算次数 712
 
 benchmark_test.go 包含测试数据集，"HardestDatabase110626" 375 题、“HardestDatabase1905_11” 48766 题：
 
     $ go test . -v -count=1 -test.run Hardest1106_ST
-    $ go test . -v -count=1 -test.run TestHardest1905_11_ST
+    $ go test . -v -count=1 -test.run Hardest1905_ST_NoRules
 
 cpuprof_test.go 包含性能测试程序，重复运行“HardestDatabase110626”以获取CPU时间：
 

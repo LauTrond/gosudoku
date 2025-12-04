@@ -49,7 +49,7 @@ func TestHardest1905_ST_Rules(t *testing.T) {
 	}).Run(t)
 }
 
-func TestHardest1905_11_MT(t *testing.T) {
+func TestHardest1905_MT(t *testing.T) {
 	(&BenchmarkConfig{
 		InputFile:  "assets/hardest_1905_11.txt",
 		OutputFile: "output/hardest_1905_11.txt",

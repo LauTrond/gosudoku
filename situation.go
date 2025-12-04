@@ -20,6 +20,14 @@ var (
 	}
 )
 
+const (
+	ExcludeDirectionNone  = 0
+	ExcludeDirectionCell  = 1
+	ExcludeDirectionRow   = 2
+	ExcludeDirectionCol   = 3
+	ExcludeDirectionBlock = 4
+)
+
 func RCtoBP(r, c int) (b int, p int) {
 	b = r/3*3 + c/3
 	p = r%3*3 + c%3
@@ -188,6 +196,7 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	if s.cells[r][c] != -1 {
 		return false
 	}
+	s.cells[r][c] = int8(n)
 
 	b, p := RCtoBP(r, c)
 	R, C := r/3, c/3
@@ -196,23 +205,22 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	s.rowSetCount[r]++
 	s.colSetCount[c]++
 	s.blockSetCount[b]++
-	s.cells[r][c] = int8(n)
 
 	if s.cellNumExcludes[r][c] < 8 {
 		for n0 := range loop9 {
 			if n0 != n {
-				s.checkEnqueueExclude(t, RCN(r, c, n0))
+				s.exclude(t, RCN(r, c, n0), ExcludeDirectionCell)
 			}
 		}
 	}
 	if s.colExcludes[n][c] < 8 {
 		for _, r0 := range loop9skip[R] {
-			s.checkEnqueueExclude(t, RCN(r0, c, n))
+			s.exclude(t, RCN(r0, c, n), ExcludeDirectionCol)
 		}
 	}
 	if s.rowExcludes[n][r] < 8 {
 		for _, c0 := range loop9skip[C] {
-			s.checkEnqueueExclude(t, RCN(r, c0, n))
+			s.exclude(t, RCN(r, c0, n), ExcludeDirectionRow)
 		}
 	}
 	if s.blockExcludes[n][b] < 8 {
@@ -221,7 +229,7 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 				continue
 			}
 			r0, c0 := BPtoRC(b, p0)
-			s.checkEnqueueExclude(t, RCN(r0, c0, n))
+			s.exclude(t, RCN(r0, c0, n), ExcludeDirectionBlock)
 		}
 	}
 	s.drainExcludeQueue(t)
@@ -229,8 +237,27 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 }
 
 func (s *Situation) Exclude(t *Trigger, rcn RowColNum) {
-	s.checkEnqueueExclude(t, rcn)
+	s.exclude(t, rcn, ExcludeDirectionNone)
 	s.drainExcludeQueue(t)
+}
+
+func (s *Situation) enqueueExclude(t *Trigger, rcn RowColNum, direction int) bool {
+	r, c, n := rcn.Extract()
+	if s.cellExclude[n][r][c] > 0 {
+		return false
+	}
+	t.EnqueueExclude(RowColNumExclude{
+		RowColNum: rcn,
+		Direction: direction,
+	})
+	return true
+}
+
+func (s *Situation) exclude(t *Trigger, rcn RowColNum, direction int) bool {
+	return s.excludeOne(t, RowColNumExclude{
+		RowColNum: rcn,
+		Direction: direction,
+	})
 }
 
 func (s *Situation) drainExcludeQueue(t *Trigger) {
@@ -246,17 +273,8 @@ func (s *Situation) drainExcludeQueue(t *Trigger) {
 	}
 }
 
-func (s *Situation) checkEnqueueExclude(t *Trigger, rcn RowColNum) bool {
-	r, c, n := rcn.Extract()
-	if s.cellExclude[n][r][c] > 0 {
-		return false
-	}
-	t.EnqueueExclude(rcn)
-	return true
-}
-
-func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
-	r, c, n := rcn.Extract()
+func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
+	r, c, n := rcne.Extract()
 	if s.cellExclude[n][r][c] > 0 {
 		return false
 	}
@@ -319,7 +337,6 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 		}
 		t.Conflict(reason)
 	}
-
 	switch colExcludes {
 	case 8:
 		for r0 := range loop9 {
@@ -355,41 +372,42 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 	}
 
 	// 宫区数对 and 宫区三数组
-	// 同一宫区内，某数字只能出现在同一行或同一列的2个或3个单元格中
+	// 同一宫区内，某数字只能出现在同一行或同一列的2个或3个单元格中，那同一宫、行或列的其他单元格排除这个数字
 	// https://sudoku.com/zh/shu-du-gui-ze/gong-qu-kuai-shu-dui/
+	// 使用了不同的算法，但本质一样。参考 README.md
 	if *flagEnableBlockSlice {
-		if rowExcludes == 6 || rowExcludes == 7 {
+		if rcne.NotFromRow() && (rowExcludes == 6 || rowExcludes == 7) {
 			for _, C0 := range loop3skip[C] {
 				C1 := 3 - C - C0
 				if rowSliceExcludes+s.rowSliceExcludes[n][r][C0] == 6 {
 					for _, rr1 := range loop3skip[rr] {
 						for cc1 := range loop3 {
-							s.checkEnqueueExclude(t, RCN(R*3+rr1, C1*3+cc1, n))
+							s.enqueueExclude(t, RCN(R*3+rr1, C1*3+cc1, n), ExcludeDirectionBlock)
 						}
 					}
 				}
 			}
 		}
 
-		if colExcludes == 6 || colExcludes == 7 {
+		if rcne.NotFromCol() && (colExcludes == 6 || colExcludes == 7) {
 			for _, R0 := range loop3skip[R] {
 				R1 := 3 - R - R0
 				if colSliceExcludes+s.colSliceExcludes[n][R0][c] == 6 {
 					for rr1 := range loop3 {
 						for _, cc1 := range loop3skip[cc] {
-							s.checkEnqueueExclude(t, RCN(R1*3+rr1, C*3+cc1, n))
+							s.enqueueExclude(t, RCN(R1*3+rr1, C*3+cc1, n), ExcludeDirectionBlock)
 						}
 					}
 				}
 			}
 		}
 
-		if blockExcludes == 6 || blockExcludes == 7 {
+		if rcne.NotFromBlock() && (blockExcludes == 6 || blockExcludes == 7) {
 			for _, rr0 := range loop3skip[rr] {
 				rr1 := 3 - rr - rr0
 				if rowSliceExcludes+s.rowSliceExcludes[n][R*3+rr0][C] == 6 {
 					for _, c0 := range loop9skip[C] {
-						s.checkEnqueueExclude(t, RCN(R*3+rr1, c0, n))
+						s.enqueueExclude(t, RCN(R*3+rr1, c0, n), ExcludeDirectionRow)
 					}
 				}
 			}
@@ -397,7 +415,7 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 				cc1 := 3 - cc - cc0
 				if colSliceExcludes+s.colSliceExcludes[n][R][C*3+cc0] == 6 {
 					for _, r0 := range loop9skip[R] {
-						s.checkEnqueueExclude(t, RCN(r0, C*3+cc1, n))
+						s.enqueueExclude(t, RCN(r0, C*3+cc1, n), ExcludeDirectionCol)
 					}
 				}
 			}
@@ -405,10 +423,10 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 	}
 
 	// 显性数对
-	// 同一行、列、宫中，两个单元格只能填入同样的两个数字，可以排除其他单元格填入这两个数字的可能性
+	// 同一行、列、宫中，两个单元格只能填入同样的两个数字，可以排除其他单元格填入这两个数字
 	// https://sudoku.com/zh/shu-du-gui-ze/xian-xing-shu-dui/
 	if *flagEnableExplicitPairs {
-		if cellNumExcludes == 7 {
+		if rcne.NotFromCell() && cellNumExcludes == 7 {
 			foundRow := -1
 			for r0 := range loop9 {
 				if r0 != r && cellExcludeBits == s.cellExcludeBits[r0][c] {
@@ -427,7 +445,7 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 					}
 					for r1 := range loop9 {
 						if r1 != r && r1 != foundRow {
-							s.checkEnqueueExclude(t, RCN(r1, c, n0))
+							s.enqueueExclude(t, RCN(r1, c, n0), ExcludeDirectionCol)
 						}
 					}
 				}
@@ -451,7 +469,7 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 					}
 					for c1 := range loop9 {
 						if c1 != c && c1 != foundCol {
-							s.checkEnqueueExclude(t, RCN(r, c1, n0))
+							s.enqueueExclude(t, RCN(r, c1, n0), ExcludeDirectionRow)
 						}
 					}
 				}
@@ -480,7 +498,7 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 					for p1 := range loop9 {
 						if p1 != p && p1 != foundPos {
 							r1, c1 := BPtoRC(b, p1)
-							s.checkEnqueueExclude(t, RCN(r1, c1, n0))
+							s.enqueueExclude(t, RCN(r1, c1, n0), ExcludeDirectionBlock)
 						}
 					}
 				}
@@ -492,7 +510,7 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 	// 同一行、列、宫中，两个数字只能填入同样的两个单元格，可以排除其他数字在这两单元格的可能性
 	// https://sudoku.com/zh/shu-du-gui-ze/yin-xing-shu-dui/
 	if *flagEnableHiddenPairs {
-		if rowExcludes == 7 {
+		if rcne.NotFromRow() && rowExcludes == 7 {
 			foundNum := -1
 			for n0 := range loop9 {
 				if n0 != n && rowExcludeBits == s.rowExcludeBits[n0][r] {
@@ -511,13 +529,13 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 					}
 					for n1 := range loop9 {
 						if n1 != n && n1 != foundNum {
-							s.checkEnqueueExclude(t, RCN(r, c0, n1))
+							s.enqueueExclude(t, RCN(r, c0, n1), ExcludeDirectionCell)
 						}
 					}
 				}
 			}
 		}
-		if colExcludes == 7 {
+		if rcne.NotFromCol() && colExcludes == 7 {
 			foundNum := -1
 			for n0 := range loop9 {
 				if n0 != n && colExcludeBits == s.colExcludeBits[n0][c] {
@@ -536,13 +554,13 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 					}
 					for n1 := range loop9 {
 						if n1 != n && n1 != foundNum {
-							s.checkEnqueueExclude(t, RCN(r0, c, n1))
+							s.enqueueExclude(t, RCN(r0, c, n1), ExcludeDirectionCell)
 						}
 					}
 				}
 			}
 		}
-		if blockExcludes == 7 {
+		if rcne.NotFromBlock() && blockExcludes == 7 {
 			foundNum := -1
 			for n0 := range loop9 {
 				if n0 != n && blockExcludeBits == s.blockExcludeBits[n0][b] {
@@ -562,7 +580,7 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 					}
 					for n1 := range loop9 {
 						if n1 != n && n1 != foundNum {
-							s.checkEnqueueExclude(t, RCN(r0, c0, n1))
+							s.enqueueExclude(t, RCN(r0, c0, n1), ExcludeDirectionCell)
 						}
 					}
 				}
@@ -571,10 +589,10 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 	}
 
 	// X-Wing
-	// 同一数字，在两行（或两列）中有相同的 2 个候选单元格
+	// 同一数字，在两行（列）中有相同的 2 个候选单元格，可以排除其他行（列）同列（行）填入 n 的可能性
 	// https://sudoku.com/zh/shu-du-gui-ze/x-yi-jie-fa/
 	if *flagEnableXWing {
-		if rowExcludes == 7 {
+		if rcne.NotFromRow() && rowExcludes == 7 {
 			foundRow := -1
 			for r0 := range loop9 {
 				if r0 != r && rowExcludeBits == s.rowExcludeBits[n][r0] {
@@ -583,7 +601,7 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 				}
 			}
 			if foundRow >= 0 {
-				// r 和 foundRow 形成 X-Wing，可以排除其他行的 n 在这两列的可能性
+				// r 和 foundRow 形成 X-Wing
 				for c0 := range loop9 {
 					if rowExcludeBits&(1<<c0) > 0 {
 						continue
@@ -593,13 +611,13 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 					}
 					for r1 := range loop9 {
 						if r1 != r && r1 != foundRow {
-							s.checkEnqueueExclude(t, RCN(r1, c0, n))
+							s.enqueueExclude(t, RCN(r1, c0, n), ExcludeDirectionCol)
 						}
 					}
 				}
 			}
 		}
-		if colExcludes == 7 {
+		if rcne.NotFromCol() && colExcludes == 7 {
 			foundCol := -1
 			for c0 := range loop9 {
 				if c0 != c && colExcludeBits == s.colExcludeBits[n][c0] {
@@ -618,7 +636,7 @@ func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) bool {
 					}
 					for c1 := range loop9 {
 						if c1 != c && c1 != foundCol {
-							s.checkEnqueueExclude(t, RCN(r0, c1, n))
+							s.enqueueExclude(t, RCN(r0, c1, n), ExcludeDirectionRow)
 						}
 					}
 				}
@@ -639,14 +657,8 @@ func (s *Situation) Show(title string, r, c int) {
 	ShowCells(&s.cells, title, r, c)
 }
 
-var RowColHash [9][9]int
-
-func init() {
-	for r := range loop9 {
-		for c := range loop9 {
-			RowColHash[r][c] = (531 + r*317 + c*659) % 997
-		}
-	}
+func (s *Situation) RowColHash(rc RowCol) int {
+	return (rc.Row*317 + rc.Col*659 + s.setCount*531) % 997
 }
 
 func (s *Situation) ChooseGuessingCell1() []RowColNum {
@@ -664,8 +676,7 @@ func (s *Situation) ChooseGuessingCell1() []RowColNum {
 		if candidate.Score != selected.Score {
 			return candidate.Score < selected.Score
 		}
-		return RowColHash[candidate.Row][candidate.Col] <
-			RowColHash[selected.Row][selected.Col]
+		return s.RowColHash(candidate.RowCol) < s.RowColHash(selected.RowCol)
 	}
 	for r := range loop9 {
 		for c := range loop9 {
@@ -724,8 +735,7 @@ func (s *Situation) ChooseGuessingCell2() []RowColNum {
 		if candidate.Score != selected.Score {
 			return candidate.Score < selected.Score
 		}
-		return RowColHash[candidate.Row][candidate.Col] <
-			RowColHash[selected.Row][selected.Col]
+		return s.RowColHash(candidate.RowCol) < s.RowColHash(selected.RowCol)
 	}
 	for r := range loop9 {
 		for c := range loop9 {
@@ -779,8 +789,8 @@ func (s *Situation) CompareNumInCell(r, c, n1, n2 int) bool {
 		return score1 < score2
 	}
 
-	base := r*4 + c*7
-	return (base+n1)%9 < (base+n2)%9
+	base := r*61 + c*67 + s.setCount*71
+	return (base*n1)%41 < (base*n2)%41
 }
 
 func ShowCells(cells *[9][9]int8, title string, r, c int) {
@@ -867,18 +877,39 @@ func (rcn RowColNum) Extract() (r, c, n int) {
 	return int(rcn.Row), int(rcn.Col), int(rcn.Num)
 }
 
+type RowColNumExclude struct {
+	RowColNum
+	Direction int
+}
+
+func (rcne RowColNumExclude) NotFromCell() bool {
+	return rcne.Direction != ExcludeDirectionCell
+}
+
+func (rcne RowColNumExclude) NotFromRow() bool {
+	return rcne.Direction != ExcludeDirectionRow
+}
+
+func (rcne RowColNumExclude) NotFromCol() bool {
+	return rcne.Direction != ExcludeDirectionCol
+}
+
+func (rcne RowColNumExclude) NotFromBlock() bool {
+	return rcne.Direction != ExcludeDirectionBlock
+}
+
 var triggerPool = sync.Pool{
 	New: func() interface{} {
 		return &Trigger{
 			Confirms: make([]RowColNum, 0, 20),
-			excludes: make([]RowColNum, 100),
+			excludes: make([]RowColNumExclude, 100),
 		}
 	},
 }
 
 type Trigger struct {
 	Confirms    []RowColNum
-	excludes    []RowColNum
+	excludes    []RowColNumExclude
 	excludeHead int
 	excludeTail int
 	Conflicts   []string
@@ -905,10 +936,17 @@ func (t *Trigger) Confirm(rcn RowColNum) {
 	t.Confirms = append(t.Confirms, rcn)
 }
 
-func (t *Trigger) EnqueueExclude(rcn RowColNum) {
+func (t *Trigger) EnqueueExclude(rcne RowColNumExclude) {
+	// for i := t.excludeHead; i < t.excludeTail; i++ {
+	// 	compare := &t.excludes[i%len(t.excludes)]
+	// 	if compare.RowColNum == rcne.RowColNum {
+	// 		compare.Direction = ExcludeDirectionNone
+	// 		return
+	// 	}
+	// }
 	if t.excludeTail-t.excludeHead >= len(t.excludes) {
 		newSize := max(len(t.excludes)*2, 100)
-		newExcludes := make([]RowColNum, newSize)
+		newExcludes := make([]RowColNumExclude, newSize)
 		for i := t.excludeHead; i < t.excludeTail; i++ {
 			newExcludes[i-t.excludeHead] = t.excludes[i%len(t.excludes)]
 		}
@@ -916,17 +954,17 @@ func (t *Trigger) EnqueueExclude(rcn RowColNum) {
 		t.excludeTail = t.excludeTail - t.excludeHead
 		t.excludeHead = 0
 	}
-	t.excludes[t.excludeTail%len(t.excludes)] = rcn
+	t.excludes[t.excludeTail%len(t.excludes)] = rcne
 	t.excludeTail++
 }
 
-func (t *Trigger) DequeueExclude() (RowColNum, bool) {
+func (t *Trigger) DequeueExclude() (RowColNumExclude, bool) {
 	if t.excludeTail-t.excludeHead > 0 {
 		result := t.excludes[t.excludeHead%len(t.excludes)]
 		t.excludeHead++
 		return result, true
 	} else {
-		return RowColNum{}, false
+		return RowColNumExclude{}, false
 	}
 }
 
