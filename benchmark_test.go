@@ -30,22 +30,33 @@ func Test17Clue_MT(t *testing.T) {
 	}).Run(t)
 }
 
-func TestHardest1905_ST_NoRules(t *testing.T) {
+func TestHardest1905_Default(t *testing.T) {
 	(&BenchmarkConfig{
-		InputFile:   "assets/hardest_1905_11.txt",
-		OutputFile:  "output/hardest_1905_11.txt",
-		EnableRules: false,
-		// go tool pprof -http=:5001 output/hardest1905_norules.pprof
-		PprofFile: "output/hardest1905_norules.pprof",
+		InputFile:  "assets/hardest_1905_11.txt",
+		OutputFile: "output/hardest_1905_11.txt",
+		// go tool pprof -http=:5001 output/hardest1905_default.pprof
+		PprofFile:  "output/hardest1905_default.pprof",
+		ComplexGen: 6,
 	}).Run(t)
 }
-func TestHardest1905_ST_Rules(t *testing.T) {
+
+func TestHardest1905_Fast(t *testing.T) {
 	(&BenchmarkConfig{
-		InputFile:   "assets/hardest_1905_11.txt",
-		OutputFile:  "output/hardest_1905_11.txt",
-		EnableRules: true,
-		// go tool pprof -http=:5002 output/hardest1905_rules.pprof
-		PprofFile: "output/hardest1905_rules.pprof",
+		InputFile:  "assets/hardest_1905_11.txt",
+		OutputFile: "output/hardest_1905_11.txt",
+		// go tool pprof -http=:5001 output/hardest1905_fast.pprof
+		PprofFile:  "output/hardest1905_fast.pprof",
+		ComplexGen: -1,
+	}).Run(t)
+}
+
+func TestHardest1905_Full(t *testing.T) {
+	(&BenchmarkConfig{
+		InputFile:  "assets/hardest_1905_11.txt",
+		OutputFile: "output/hardest_1905_11.txt",
+		// go tool pprof -http=:5001 output/hardest1905_full.pprof
+		PprofFile:  "output/hardest1905_full.pprof",
+		ComplexGen: 20,
 	}).Run(t)
 }
 
@@ -54,6 +65,7 @@ func TestHardest1905_MT(t *testing.T) {
 		InputFile:  "assets/hardest_1905_11.txt",
 		OutputFile: "output/hardest_1905_11.txt",
 		Parallel:   runtime.NumCPU(),
+		ComplexGen: -1,
 	}).Run(t)
 }
 
@@ -78,7 +90,7 @@ type BenchmarkConfig struct {
 	OutputFile      string
 	OverwriteOutput bool
 	PprofFile       string
-	EnableRules     bool
+	ComplexGen      int
 }
 
 func (cfg *BenchmarkConfig) Run(t *testing.T) {
@@ -91,11 +103,11 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 		}
 	}
 
-	*flagEnableBlockSlice = cfg.EnableRules
-	*flagEnableExplicitPairs = cfg.EnableRules
-	*flagEnableHiddenPairs = cfg.EnableRules
-	*flagEnableXWing = cfg.EnableRules
-
+	if cfg.ComplexGen != 0 {
+		*flagComplexGen = cfg.ComplexGen
+	} else {
+		cfg.ComplexGen = 6
+	}
 	inputData, err := os.ReadFile(cfg.InputFile)
 	check(err)
 	br := bufio.NewReader(bytes.NewReader(inputData))
@@ -148,6 +160,7 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 	printNamedValue("输出文件", "%s", cfg.OutputFile)
 	printNamedValue("CPU统计文件", "%s", cfg.PprofFile)
 	printNamedValue("线程数", "%d", cfg.Parallel)
+	printNamedValue("复杂规则应用上限", "%v", cfg.ComplexGen)
 	printNamedValue("启动时间", "%s", startTime.Format("2006-01-02 15:04:05"))
 
 	getLine := func() ([]byte, bool) {
@@ -184,7 +197,7 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 			}
 			solutionLine[81] = '\n'
 		} else {
-			solutionLine = []byte(fmt.Sprintf("%d solution(s)", len(ctx.solutions)))
+			solutionLine = fmt.Appendf(nil, "%d solution(s)", len(ctx.solutions))
 		}
 
 		mtx.Lock()
@@ -253,7 +266,7 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 }
 
 func printNamedValue(name string, valueFmt string, value interface{}) {
-	tab := strings.Repeat(" ", 15-textWidth(name))
+	tab := strings.Repeat(" ", 18-textWidth(name))
 	fmt.Printf("%s:%s%s\n", name, tab, fmt.Sprintf(valueFmt, value))
 }
 

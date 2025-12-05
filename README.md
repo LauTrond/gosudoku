@@ -127,7 +127,7 @@ puzzles/hard-02.txt 是某个新闻号称"最难的数独"，本项目找到唯�
 benchmark_test.go 包含测试数据集，"HardestDatabase110626" 375 题、“HardestDatabase1905_11” 48766 题：
 
     $ go test . -v -count=1 -test.run Hardest1106_ST
-    $ go test . -v -count=1 -test.run Hardest1905_ST_NoRules
+    $ go test . -v -count=1 -test.run Hardest1905_Fast
 
 cpuprof_test.go 包含性能测试程序，重复运行“HardestDatabase110626”以获取CPU时间：
 

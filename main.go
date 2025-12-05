@@ -13,11 +13,8 @@ var (
 	flagStopAtFirstSolution = flag.Bool("one", false, "找到一个解即停止")
 	flagShowStat            = flag.Bool("stat", false, "显示运算统计信息")
 	flagShowBranch          = flag.Bool("branch", false, "显示分支结构")
-	flagEnableBlockSlice    = flag.Bool("blockslice", true, "启用 宫区数组 排除规则")
-	flagEnableExplicitPairs = flag.Bool("explicitpairs", true, "启用 显性数对 排除规则")
-	flagEnableHiddenPairs   = flag.Bool("hiddenpairs", true, "启用 隐性数对 排除规则")
-	flagEnableXWing         = flag.Bool("xwing", true, "启用 X-Wing 排除规则")
-	flagDisableRules        = flag.Bool("norules", false, "禁用所有高级排除规则, 等同于 -blockslice=false -explicitpairs=false -hiddenpairs=false -xwing=false")
+	flagComplexGen          = flag.Int("complex-gen", 6, "在指定分支次数前使用高级排除规则")
+	flagComplexCell         = flag.Int("complex-cell", 7, "复杂规则应用范围，有效范围5-7")
 )
 
 const MsgUsage = `使用方法：
@@ -33,13 +30,6 @@ func main() {
 		flag.CommandLine.PrintDefaults()
 	}
 	flag.Parse()
-
-	if *flagDisableRules {
-		*flagEnableBlockSlice = false
-		*flagEnableExplicitPairs = false
-		*flagEnableHiddenPairs = false
-		*flagEnableXWing = false
-	}
 
 	puzzle := loadPuzzle()
 	s, t := ParseSituation(puzzle)

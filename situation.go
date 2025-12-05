@@ -21,11 +21,27 @@ var (
 )
 
 const (
-	ExcludeDirectionNone  = 0
-	ExcludeDirectionCell  = 1
-	ExcludeDirectionRow   = 2
-	ExcludeDirectionCol   = 3
-	ExcludeDirectionBlock = 4
+	CheckAll = 0
+
+	NoRowToColCheck   = 1
+	NoRowToBlockCheck = 1 << 1
+	NoRowToNumCheck   = 1 << 2
+	NoRowCheck        = NoRowToColCheck | NoRowToBlockCheck | NoRowToNumCheck
+
+	NoColToRowCheck   = 1 << 3
+	NoColToBlockCheck = 1 << 4
+	NoColToNumCheck   = 1 << 5
+	NoColCheck        = NoColToRowCheck | NoColToBlockCheck | NoColToNumCheck
+
+	NoBlockToRowCheck = 1 << 6
+	NoBlockToColCheck = 1 << 7
+	NoBlockToNumCheck = 1 << 8
+	NoBlockCheck      = NoBlockToRowCheck | NoBlockToColCheck | NoBlockToNumCheck
+
+	NoNumToRowCheck   = 1 << 9
+	NoNumToColCheck   = 1 << 10
+	NoNumToBlockCheck = 1 << 11
+	NoNumCheck        = NoNumToRowCheck | NoNumToColCheck | NoNumToBlockCheck
 )
 
 func RCtoBP(r, c int) (b int, p int) {
@@ -209,18 +225,18 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	if s.cellNumExcludes[r][c] < 8 {
 		for n0 := range loop9 {
 			if n0 != n {
-				s.exclude(t, RCN(r, c, n0), ExcludeDirectionCell)
+				s.exclude(t, RCN(r, c, n0), NoNumCheck)
 			}
 		}
 	}
 	if s.colExcludes[n][c] < 8 {
 		for _, r0 := range loop9skip[R] {
-			s.exclude(t, RCN(r0, c, n), ExcludeDirectionCol)
+			s.exclude(t, RCN(r0, c, n), NoColCheck)
 		}
 	}
 	if s.rowExcludes[n][r] < 8 {
 		for _, c0 := range loop9skip[C] {
-			s.exclude(t, RCN(r, c0, n), ExcludeDirectionRow)
+			s.exclude(t, RCN(r, c0, n), NoRowCheck)
 		}
 	}
 	if s.blockExcludes[n][b] < 8 {
@@ -229,7 +245,7 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 				continue
 			}
 			r0, c0 := BPtoRC(b, p0)
-			s.exclude(t, RCN(r0, c0, n), ExcludeDirectionBlock)
+			s.exclude(t, RCN(r0, c0, n), NoBlockCheck)
 		}
 	}
 	s.drainExcludeQueue(t)
@@ -237,26 +253,26 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 }
 
 func (s *Situation) Exclude(t *Trigger, rcn RowColNum) {
-	s.exclude(t, rcn, ExcludeDirectionNone)
+	s.exclude(t, rcn, CheckAll)
 	s.drainExcludeQueue(t)
 }
 
-func (s *Situation) enqueueExclude(t *Trigger, rcn RowColNum, direction int) bool {
+func (s *Situation) enqueueExclude(t *Trigger, rcn RowColNum, checkFlag int) bool {
 	r, c, n := rcn.Extract()
 	if s.cellExclude[n][r][c] > 0 {
 		return false
 	}
 	t.EnqueueExclude(RowColNumExclude{
 		RowColNum: rcn,
-		Direction: direction,
+		CheckFlag: checkFlag,
 	})
 	return true
 }
 
-func (s *Situation) exclude(t *Trigger, rcn RowColNum, direction int) bool {
+func (s *Situation) exclude(t *Trigger, rcn RowColNum, checkFlag int) bool {
 	return s.excludeOne(t, RowColNumExclude{
 		RowColNum: rcn,
-		Direction: direction,
+		CheckFlag: checkFlag,
 	})
 }
 
@@ -280,7 +296,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	}
 	s.cellExclude[n][r][c] = 1
 
-	b, p := RCtoBP(r, c)
+	b, _ := RCtoBP(r, c)
 	R, C := r/3, c/3
 	rr, cc := r-R*3, c-C*3
 
@@ -371,217 +387,209 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 		t.Conflict(reason)
 	}
 
+	if s.branchGeneration >= *flagComplexGen {
+		return true
+	}
+
 	// 宫区数对 and 宫区三数组
 	// 同一宫区内，某数字只能出现在同一行或同一列的2个或3个单元格中，那同一宫、行或列的其他单元格排除这个数字
 	// https://sudoku.com/zh/shu-du-gui-ze/gong-qu-kuai-shu-dui/
 	// 使用了不同的算法，但本质一样。参考 README.md
-	if *flagEnableBlockSlice {
-		if rcne.NotFromRow() && (rowExcludes == 6 || rowExcludes == 7) {
-			for _, C0 := range loop3skip[C] {
-				C1 := 3 - C - C0
-				if rowSliceExcludes+s.rowSliceExcludes[n][r][C0] == 6 {
-					for _, rr1 := range loop3skip[rr] {
-						for cc1 := range loop3 {
-							s.enqueueExclude(t, RCN(R*3+rr1, C1*3+cc1, n), ExcludeDirectionBlock)
-						}
-					}
-				}
-			}
-		}
-
-		if rcne.NotFromCol() && (colExcludes == 6 || colExcludes == 7) {
-			for _, R0 := range loop3skip[R] {
-				R1 := 3 - R - R0
-				if colSliceExcludes+s.colSliceExcludes[n][R0][c] == 6 {
-					for rr1 := range loop3 {
-						for _, cc1 := range loop3skip[cc] {
-							s.enqueueExclude(t, RCN(R1*3+rr1, C*3+cc1, n), ExcludeDirectionBlock)
-						}
-					}
-				}
-			}
-		}
-
-		if rcne.NotFromBlock() && (blockExcludes == 6 || blockExcludes == 7) {
-			for _, rr0 := range loop3skip[rr] {
-				rr1 := 3 - rr - rr0
-				if rowSliceExcludes+s.rowSliceExcludes[n][R*3+rr0][C] == 6 {
-					for _, c0 := range loop9skip[C] {
-						s.enqueueExclude(t, RCN(R*3+rr1, c0, n), ExcludeDirectionRow)
-					}
-				}
-			}
-			for _, cc0 := range loop3skip[cc] {
-				cc1 := 3 - cc - cc0
-				if colSliceExcludes+s.colSliceExcludes[n][R][C*3+cc0] == 6 {
-					for _, r0 := range loop9skip[R] {
-						s.enqueueExclude(t, RCN(r0, C*3+cc1, n), ExcludeDirectionCol)
+	if rcne.RowToBlockCheck() && (rowExcludes == 6 || rowExcludes == 7) {
+		for _, C0 := range loop3skip[C] {
+			C1 := 3 - C - C0
+			if rowSliceExcludes+s.rowSliceExcludes[n][r][C0] == 6 {
+				for _, rr1 := range loop3skip[rr] {
+					for cc1 := range loop3 {
+						s.enqueueExclude(t, RCN(R*3+rr1, C1*3+cc1, n), NoBlockToRowCheck)
 					}
 				}
 			}
 		}
 	}
 
-	// 显性数对
-	// 同一行、列、宫中，两个单元格只能填入同样的两个数字，可以排除其他单元格填入这两个数字
+	if rcne.ColToBlockCheck() && (colExcludes == 6 || colExcludes == 7) {
+		for _, R0 := range loop3skip[R] {
+			R1 := 3 - R - R0
+			if colSliceExcludes+s.colSliceExcludes[n][R0][c] == 6 {
+				for rr1 := range loop3 {
+					for _, cc1 := range loop3skip[cc] {
+						s.enqueueExclude(t, RCN(R1*3+rr1, C*3+cc1, n), NoBlockToColCheck)
+					}
+				}
+			}
+		}
+	}
+
+	if rcne.BlockToRowCheck() && (blockExcludes == 6 || blockExcludes == 7) {
+		for _, rr0 := range loop3skip[rr] {
+			rr1 := 3 - rr - rr0
+			if rowSliceExcludes+s.rowSliceExcludes[n][R*3+rr0][C] == 6 {
+				for _, c0 := range loop9skip[C] {
+					s.enqueueExclude(t, RCN(R*3+rr1, c0, n), NoRowToBlockCheck)
+				}
+			}
+		}
+	}
+	if rcne.BlockToColCheck() && (blockExcludes == 6 || blockExcludes == 7) {
+		for _, cc0 := range loop3skip[cc] {
+			cc1 := 3 - cc - cc0
+			if colSliceExcludes+s.colSliceExcludes[n][R][C*3+cc0] == 6 {
+				for _, r0 := range loop9skip[R] {
+					s.enqueueExclude(t, RCN(r0, C*3+cc1, n), NoColToBlockCheck)
+				}
+			}
+		}
+	}
+	// 显性数组
+	// 同一行、列、宫中，N个单元格只能填入同样的N个数字，可以排除其他单元格填入这N个数字
 	// https://sudoku.com/zh/shu-du-gui-ze/xian-xing-shu-dui/
-	if *flagEnableExplicitPairs {
-		if rcne.NotFromCell() && cellNumExcludes == 7 {
-			foundRow := -1
-			for r0 := range loop9 {
-				if r0 != r && cellExcludeBits == s.cellExcludeBits[r0][c] {
-					foundRow = r0
-					break
-				}
+	if rcne.NumToColCheck() && cellNumExcludes >= int8(*flagComplexCell) && cellNumExcludes <= 7 {
+		var mask, count int
+		for r0 := range loop9 {
+			if s.cellExcludeBits[r0][c] == cellExcludeBits {
+				mask |= 1 << r0
+				count++
 			}
-			if foundRow >= 0 {
-				// (r,c) 和 (foundRow,c) 形成显性数对
-				for n0 := range loop9 {
-					if cellExcludeBits&(1<<n0) > 0 {
-						continue
-					}
-					if s.colExcludes[n0][c] >= 7 {
-						continue
-					}
-					for r1 := range loop9 {
-						if r1 != r && r1 != foundRow {
-							s.enqueueExclude(t, RCN(r1, c, n0), ExcludeDirectionCol)
-						}
+		}
+		if count >= int(9-cellNumExcludes) {
+			for n0 := range loop9 {
+				if cellExcludeBits&(1<<n0) > 0 {
+					continue
+				}
+				if s.colExcludes[n0][c] >= cellNumExcludes {
+					continue
+				}
+				for r1 := range loop9 {
+					if mask&(1<<r1) == 0 {
+						s.enqueueExclude(t, RCN(r1, c, n0), NoColToNumCheck)
 					}
 				}
 			}
+		}
+	}
+	if rcne.NumToRowCheck() && cellNumExcludes >= int8(*flagComplexCell) && cellNumExcludes <= 7 {
+		var mask, count int
+		for c0 := range loop9 {
+			if s.cellExcludeBits[r][c0] == cellExcludeBits {
+				mask |= 1 << c0
+				count++
+			}
+		}
+		if count >= int(9-cellNumExcludes) {
+			for n0 := range loop9 {
+				if cellExcludeBits&(1<<n0) > 0 {
+					continue
+				}
+				if s.rowExcludes[n0][r] >= cellNumExcludes {
+					continue
+				}
+				for c1 := range loop9 {
+					if mask&(1<<c1) == 0 {
+						s.enqueueExclude(t, RCN(r, c1, n0), NoRowToNumCheck)
+					}
+				}
+			}
+		}
+	}
+	if rcne.NumToBlockCheck() && cellNumExcludes >= int8(*flagComplexCell) && cellNumExcludes <= 7 {
+		var mask, count int
+		for p0 := range loop9 {
+			r0, c0 := BPtoRC(b, p0)
+			if s.cellExcludeBits[r0][c0] == cellExcludeBits {
+				mask |= 1 << p0
+				count++
+			}
+		}
+		if count >= int(9-cellNumExcludes) {
+			for n0 := range loop9 {
+				if cellExcludeBits&(1<<n0) > 0 {
+					continue
+				}
+				if s.blockExcludes[n0][b] >= cellNumExcludes {
+					continue
+				}
+				for p1 := range loop9 {
+					if mask&(1<<p1) == 0 {
+						r1, c1 := BPtoRC(b, p1)
+						s.enqueueExclude(t, RCN(r1, c1, n0), NoBlockToNumCheck)
+					}
+				}
+			}
+		}
+	}
 
-			foundCol := -1
+	// 隐性数组
+	// 同一行、列、宫中，两个数字只能填入同样的两个单元格，可以排除其他数字在这两单元格的可能性
+	// https://sudoku.com/zh/shu-du-gui-ze/yin-xing-shu-dui/
+	if rcne.RowToNumCheck() && rowExcludes >= int8(*flagComplexCell) && rowExcludes <= 7 {
+		var mask, count int
+		for n0 := range loop9 {
+			if s.rowExcludeBits[n0][r] == rowExcludeBits {
+				mask |= 1 << n0
+				count++
+			}
+		}
+		if count >= int(9-rowExcludes) {
 			for c0 := range loop9 {
-				if c0 != c && cellExcludeBits == s.cellExcludeBits[r][c0] {
-					foundCol = c0
-					break
+				if rowExcludeBits&(1<<c0) > 0 {
+					continue
 				}
-			}
-			if foundCol >= 0 {
-				// (r,c) 和 (r,foundCol) 形成显性数对
-				for n0 := range loop9 {
-					if cellExcludeBits&(1<<n0) > 0 {
-						continue
-					}
-					if s.rowExcludes[n0][r] >= 7 {
-						continue
-					}
-					for c1 := range loop9 {
-						if c1 != c && c1 != foundCol {
-							s.enqueueExclude(t, RCN(r, c1, n0), ExcludeDirectionRow)
-						}
+				if s.cellNumExcludes[r][c0] >= rowExcludes {
+					continue
+				}
+				for n1 := range loop9 {
+					if mask&(1<<n1) == 0 {
+						s.enqueueExclude(t, RCN(r, c0, n1), NoRowToNumCheck)
 					}
 				}
 			}
-
-			foundPos := -1
+		}
+	}
+	if rcne.ColToNumCheck() && colExcludes >= int8(*flagComplexCell) && colExcludes <= 7 {
+		var mask, count int
+		for n0 := range loop9 {
+			if s.colExcludeBits[n0][c] == colExcludeBits {
+				mask |= 1 << n0
+				count++
+			}
+		}
+		if count >= int(9-colExcludes) {
+			for r0 := range loop9 {
+				if colExcludeBits&(1<<r0) > 0 {
+					continue
+				}
+				if s.cellNumExcludes[r0][c] >= colExcludes {
+					continue
+				}
+				for n1 := range loop9 {
+					if mask&(1<<n1) == 0 {
+						s.enqueueExclude(t, RCN(r0, c, n1), NoNumToColCheck)
+					}
+				}
+			}
+		}
+	}
+	if rcne.BlockToNumCheck() && blockExcludes >= int8(*flagComplexCell) && blockExcludes <= 7 {
+		var mask, count int
+		for n0 := range loop9 {
+			if s.blockExcludeBits[n0][b] == blockExcludeBits {
+				mask |= 1 << n0
+				count++
+			}
+		}
+		if count >= int(9-blockExcludes) {
 			for p0 := range loop9 {
-				if p0 == p {
+				if blockExcludeBits&(1<<p0) > 0 {
 					continue
 				}
 				r0, c0 := BPtoRC(b, p0)
-				if cellExcludeBits == s.cellExcludeBits[r0][c0] {
-					foundPos = p0
-					break
+				if s.cellNumExcludes[r0][c0] >= blockExcludes {
+					continue
 				}
-			}
-			if foundPos >= 0 {
-				// (b,p) 和 (b,foundPos) 形成显性数对
-				for n0 := range loop9 {
-					if cellExcludeBits&(1<<n0) > 0 {
-						continue
-					}
-					if s.blockExcludes[n0][b] >= 7 {
-						continue
-					}
-					for p1 := range loop9 {
-						if p1 != p && p1 != foundPos {
-							r1, c1 := BPtoRC(b, p1)
-							s.enqueueExclude(t, RCN(r1, c1, n0), ExcludeDirectionBlock)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// 隐性数对
-	// 同一行、列、宫中，两个数字只能填入同样的两个单元格，可以排除其他数字在这两单元格的可能性
-	// https://sudoku.com/zh/shu-du-gui-ze/yin-xing-shu-dui/
-	if *flagEnableHiddenPairs {
-		if rcne.NotFromRow() && rowExcludes == 7 {
-			foundNum := -1
-			for n0 := range loop9 {
-				if n0 != n && rowExcludeBits == s.rowExcludeBits[n0][r] {
-					foundNum = n0
-					break
-				}
-			}
-			if foundNum >= 0 {
-				// n 和 foundNum 形成隐性数对
-				for c0 := range loop9 {
-					if rowExcludeBits&(1<<c0) > 0 {
-						continue
-					}
-					if s.cellNumExcludes[r][c0] >= 7 {
-						continue
-					}
-					for n1 := range loop9 {
-						if n1 != n && n1 != foundNum {
-							s.enqueueExclude(t, RCN(r, c0, n1), ExcludeDirectionCell)
-						}
-					}
-				}
-			}
-		}
-		if rcne.NotFromCol() && colExcludes == 7 {
-			foundNum := -1
-			for n0 := range loop9 {
-				if n0 != n && colExcludeBits == s.colExcludeBits[n0][c] {
-					foundNum = n0
-					break
-				}
-			}
-			if foundNum >= 0 {
-				// n 和 foundNum 形成隐性数对，可以排除其他数字在该列的这两单元格的可能性
-				for r0 := range loop9 {
-					if colExcludeBits&(1<<r0) > 0 {
-						continue
-					}
-					if s.cellNumExcludes[r0][c] >= 7 {
-						continue
-					}
-					for n1 := range loop9 {
-						if n1 != n && n1 != foundNum {
-							s.enqueueExclude(t, RCN(r0, c, n1), ExcludeDirectionCell)
-						}
-					}
-				}
-			}
-		}
-		if rcne.NotFromBlock() && blockExcludes == 7 {
-			foundNum := -1
-			for n0 := range loop9 {
-				if n0 != n && blockExcludeBits == s.blockExcludeBits[n0][b] {
-					foundNum = n0
-					break
-				}
-			}
-			if foundNum >= 0 {
-				// n 和 foundNum 形成隐性数对，可以排除其他数字在该宫的这两单元格的可能性
-				for p0 := range loop9 {
-					if blockExcludeBits&(1<<p0) > 0 {
-						continue
-					}
-					r0, c0 := BPtoRC(b, p0)
-					if s.cellNumExcludes[r0][c0] >= 7 {
-						continue
-					}
-					for n1 := range loop9 {
-						if n1 != n && n1 != foundNum {
-							s.enqueueExclude(t, RCN(r0, c0, n1), ExcludeDirectionCell)
-						}
+				for n1 := range loop9 {
+					if mask&(1<<n1) == 0 {
+						s.enqueueExclude(t, RCN(r0, c0, n1), NoNumToBlockCheck)
 					}
 				}
 			}
@@ -591,53 +599,50 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	// X-Wing
 	// 同一数字，在两行（列）中有相同的 2 个候选单元格，可以排除其他行（列）同列（行）填入 n 的可能性
 	// https://sudoku.com/zh/shu-du-gui-ze/x-yi-jie-fa/
-	if *flagEnableXWing {
-		if rcne.NotFromRow() && rowExcludes == 7 {
-			foundRow := -1
-			for r0 := range loop9 {
-				if r0 != r && rowExcludeBits == s.rowExcludeBits[n][r0] {
-					foundRow = r0
-					break
-				}
+	if rcne.RowToColCheck() && rowExcludes >= int8(*flagComplexCell) && rowExcludes <= 7 {
+		var mask, count int
+		for r0 := range loop9 {
+			if s.rowExcludeBits[n][r0] == rowExcludeBits {
+				mask |= 1 << r0
+				count++
 			}
-			if foundRow >= 0 {
-				// r 和 foundRow 形成 X-Wing
-				for c0 := range loop9 {
-					if rowExcludeBits&(1<<c0) > 0 {
-						continue
-					}
-					if s.colExcludes[n][c0] >= 7 {
-						continue
-					}
-					for r1 := range loop9 {
-						if r1 != r && r1 != foundRow {
-							s.enqueueExclude(t, RCN(r1, c0, n), ExcludeDirectionCol)
-						}
+		}
+		if count >= int(9-rowExcludes) {
+			// r 和 foundRow 形成 X-Wing
+			for c0 := range loop9 {
+				if rowExcludeBits&(1<<c0) > 0 {
+					continue
+				}
+				if s.colExcludes[n][c0] >= rowExcludes {
+					continue
+				}
+				for r1 := range loop9 {
+					if mask&(1<<r1) == 0 {
+						s.enqueueExclude(t, RCN(r1, c0, n), NoColToRowCheck)
 					}
 				}
 			}
 		}
-		if rcne.NotFromCol() && colExcludes == 7 {
-			foundCol := -1
-			for c0 := range loop9 {
-				if c0 != c && colExcludeBits == s.colExcludeBits[n][c0] {
-					foundCol = c0
-					break
-				}
+	}
+	if rcne.ColToRowCheck() && colExcludes >= int8(*flagComplexCell) && colExcludes <= 7 {
+		var mask, count int
+		for c0 := range loop9 {
+			if s.colExcludeBits[n][c0] == colExcludeBits {
+				mask |= 1 << c0
+				count++
 			}
-			if foundCol >= 0 {
-				// c 和 foundCol 形成 X-Wing，可以排除其他列的 n 在这两行的可能性
-				for r0 := range loop9 {
-					if colExcludeBits&(1<<r0) > 0 {
-						continue
-					}
-					if s.rowExcludes[n][r0] >= 7 {
-						continue
-					}
-					for c1 := range loop9 {
-						if c1 != c && c1 != foundCol {
-							s.enqueueExclude(t, RCN(r0, c1, n), ExcludeDirectionRow)
-						}
+		}
+		if count >= int(9-colExcludes) {
+			for r0 := range loop9 {
+				if colExcludeBits&(1<<r0) > 0 {
+					continue
+				}
+				if s.rowExcludes[n][r0] >= colExcludes {
+					continue
+				}
+				for c1 := range loop9 {
+					if mask&(1<<c1) == 0 {
+						s.enqueueExclude(t, RCN(r0, c1, n), NoRowToColCheck)
 					}
 				}
 			}
@@ -879,23 +884,44 @@ func (rcn RowColNum) Extract() (r, c, n int) {
 
 type RowColNumExclude struct {
 	RowColNum
-	Direction int
+	CheckFlag int
 }
 
-func (rcne RowColNumExclude) NotFromCell() bool {
-	return rcne.Direction != ExcludeDirectionCell
+func (rcne RowColNumExclude) RowToColCheck() bool {
+	return rcne.CheckFlag&NoRowToColCheck == 0
 }
-
-func (rcne RowColNumExclude) NotFromRow() bool {
-	return rcne.Direction != ExcludeDirectionRow
+func (rcne RowColNumExclude) RowToBlockCheck() bool {
+	return rcne.CheckFlag&NoRowToBlockCheck == 0
 }
-
-func (rcne RowColNumExclude) NotFromCol() bool {
-	return rcne.Direction != ExcludeDirectionCol
+func (rcne RowColNumExclude) RowToNumCheck() bool {
+	return rcne.CheckFlag&NoRowToNumCheck == 0
 }
-
-func (rcne RowColNumExclude) NotFromBlock() bool {
-	return rcne.Direction != ExcludeDirectionBlock
+func (rcne RowColNumExclude) ColToRowCheck() bool {
+	return rcne.CheckFlag&NoColToRowCheck == 0
+}
+func (rcne RowColNumExclude) ColToBlockCheck() bool {
+	return rcne.CheckFlag&NoColToBlockCheck == 0
+}
+func (rcne RowColNumExclude) ColToNumCheck() bool {
+	return rcne.CheckFlag&NoColToNumCheck == 0
+}
+func (rcne RowColNumExclude) BlockToRowCheck() bool {
+	return rcne.CheckFlag&NoBlockToRowCheck == 0
+}
+func (rcne RowColNumExclude) BlockToColCheck() bool {
+	return rcne.CheckFlag&NoBlockToColCheck == 0
+}
+func (rcne RowColNumExclude) BlockToNumCheck() bool {
+	return rcne.CheckFlag&NoBlockToNumCheck == 0
+}
+func (rcne RowColNumExclude) NumToRowCheck() bool {
+	return rcne.CheckFlag&NoNumToRowCheck == 0
+}
+func (rcne RowColNumExclude) NumToColCheck() bool {
+	return rcne.CheckFlag&NoNumToColCheck == 0
+}
+func (rcne RowColNumExclude) NumToBlockCheck() bool {
+	return rcne.CheckFlag&NoNumToBlockCheck == 0
 }
 
 var triggerPool = sync.Pool{
