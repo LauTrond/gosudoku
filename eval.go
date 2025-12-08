@@ -56,7 +56,7 @@ loopBranch:
 		//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
 
 		//选取一个单元格和Num进行尝试
-		guess := s.ChooseGuessingCell1()
+		guess := s.ChooseBranchCell1()
 		// guess := s.ChooseGuessingCell2()
 		if len(guess) == 0 {
 			break
@@ -117,7 +117,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 	defer last.Release()
 	for len(last.Confirms) > 0 {
 		for _, rcn := range last.Confirms {
-			cellNumExcludes := s.cellNumExcludes[rcn.Row][rcn.Col]
+			cellNumExcludes := s.numExcludes[rcn.Row][rcn.Col]
 			rowExcludes := s.rowExcludes[rcn.Num][rcn.Row]
 			colExcludes := s.colExcludes[rcn.Num][rcn.Col]
 			b, _ := RCtoBP(rcn.Row, rcn.Col)

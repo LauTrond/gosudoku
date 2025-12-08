@@ -30,26 +30,6 @@ func Test17Clue_MT(t *testing.T) {
 	}).Run(t)
 }
 
-func TestHardest1905_Default(t *testing.T) {
-	(&BenchmarkConfig{
-		InputFile:  "assets/hardest_1905_11.txt",
-		OutputFile: "output/hardest_1905_11.txt",
-		// go tool pprof -http=:5001 output/hardest1905_default.pprof
-		PprofFile:  "output/hardest1905_default.pprof",
-		ComplexGen: 6,
-	}).Run(t)
-}
-
-func TestHardest1905_Fast(t *testing.T) {
-	(&BenchmarkConfig{
-		InputFile:  "assets/hardest_1905_11.txt",
-		OutputFile: "output/hardest_1905_11.txt",
-		// go tool pprof -http=:5001 output/hardest1905_fast.pprof
-		PprofFile:  "output/hardest1905_fast.pprof",
-		ComplexGen: -1,
-	}).Run(t)
-}
-
 func TestHardest1905_Full(t *testing.T) {
 	(&BenchmarkConfig{
 		InputFile:  "assets/hardest_1905_11.txt",
@@ -57,6 +37,26 @@ func TestHardest1905_Full(t *testing.T) {
 		// go tool pprof -http=:5001 output/hardest1905_full.pprof
 		PprofFile:  "output/hardest1905_full.pprof",
 		ComplexGen: 20,
+	}).Run(t)
+}
+
+func TestHardest1905_Default(t *testing.T) {
+	(&BenchmarkConfig{
+		InputFile:  "assets/hardest_1905_11.txt",
+		OutputFile: "output/hardest_1905_11.txt",
+		// go tool pprof -http=:5002 output/hardest1905_default.pprof
+		PprofFile:  "output/hardest1905_default.pprof",
+		ComplexGen: 4,
+	}).Run(t)
+}
+
+func TestHardest1905_Fast(t *testing.T) {
+	(&BenchmarkConfig{
+		InputFile:  "assets/hardest_1905_11.txt",
+		OutputFile: "output/hardest_1905_11.txt",
+		// go tool pprof -http=:5003 output/hardest1905_fast.pprof
+		PprofFile:  "output/hardest1905_fast.pprof",
+		ComplexGen: -1,
 	}).Run(t)
 }
 
@@ -96,11 +96,6 @@ type BenchmarkConfig struct {
 func (cfg *BenchmarkConfig) Run(t *testing.T) {
 	if cfg.Parallel < 1 {
 		cfg.Parallel = 1
-	}
-	check := func(err error) {
-		if err != nil {
-			panic(err)
-		}
 	}
 
 	if cfg.ComplexGen != 0 {
@@ -280,4 +275,10 @@ func textWidth(text string) int {
 		}
 	}
 	return w
+}
+
+func check(err error) {
+	if err != nil {
+		panic(err)
+	}
 }

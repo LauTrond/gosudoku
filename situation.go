@@ -18,7 +18,18 @@ var (
 		{0, 1, 2, 6, 7, 8},
 		{0, 1, 2, 3, 4, 5},
 	}
+	rcbpMap [9][9]RowCol
 )
+
+func init() {
+	for r := range loop9 {
+		for c := range loop9 {
+			b := r/3*3 + c/3
+			p := r%3*3 + c%3
+			rcbpMap[r][c] = RowCol{b, p}
+		}
+	}
+}
 
 const (
 	CheckAll = 0
@@ -45,15 +56,13 @@ const (
 )
 
 func RCtoBP(r, c int) (b int, p int) {
-	b = r/3*3 + c/3
-	p = r%3*3 + c%3
-	return
+	v := rcbpMap[r][c]
+	return v.Row, v.Col
 }
 
 func BPtoRC(b, p int) (r int, c int) {
-	r = b/3*3 + p/3
-	c = b%3*3 + p%3
-	return
+	v := rcbpMap[b][p]
+	return v.Row, v.Col
 }
 
 // Situation 代表9*9数独的一个局势
@@ -76,29 +85,22 @@ type Situation struct {
 	//blockSetCount[b] = x ： 宫 b 已填充 x 个数
 	blockSetCount [9]int8
 
-	//cellExclude[n][r][c] = 1 ： 单元格(r,c)排除n
+	//cellExclude[n][r][c] = 1 ： 单元格(r,c)排除 n
 	cellExclude [9][9][9]int8
 
-	//cellExcludeBits[r][c] 的每一位代表该单元格排除了哪些数字
-	cellExcludeBits [9][9]int16
-
-	//numExcludes[n] ： n 的总排除次数
-	numExcludes [9]int8
-
-	//cellNumExcludes[r][c] = x ： r 行 c 列 排除了 x 个数
+	//numExcludes[r][c] = x ： 单元格(r,c)排除了 x 个数
 	//等于 sum(cellExclude[...][r][c])
-	cellNumExcludes [9][9]int8
+	numExcludes [9][9]int8
 
-	//rowExcludes[n][r] = x ： r 行的 n 排除了 x 个单元格
+	//numExcludeBits[r][c] 的每一位代表该单元格(r,c)排除了哪些数字
+	numExcludeBits [9][9]int16
+
+	//rowExcludes[n][r] = x ： r 行有 x 个单元格排除了 n
 	//等于 sum(cellExclude[n][r][...])
 	rowExcludes [9][9]int8
 
 	//rowExcludeBits[n][r] 的每一位代表 r 行排除了哪些单元格
 	rowExcludeBits [9][9]int16
-
-	//rowSumExcludes[r] = x ： r 行总共排除了 x 种可能性
-	//rowSumExcludes[r] = sum(rowExcludes[...][r])
-	rowSumExcludes [9]int8
 
 	//rowExcludes[n][r][C] = x ： 第 r 行 C 宫的 n 排除了 x 个单元格
 	//rowExcludes[n][r][C] = sum(cellExclude[n][r][C*3..C*3+2])
@@ -111,23 +113,15 @@ type Situation struct {
 	//colExcludeBits[n][c] 的每一位代表 c 列排除了哪些单元格
 	colExcludeBits [9][9]int16
 
-	//colSumExcludes[c] = x ： c 列总共排除了 x 种可能性
-	//colSumExcludes[c] = sum(colExcludes[...][c])
-	colSumExcludes [9]int8
-
-	//colSliceExcludes[n][R][c] = x ： c 列 R 宫的 n 排除了 x 个单元格
+	//colSliceExcludes[n][R][c] = x ： c 列 R 宫有x  个单元格排除了 n
 	//colSliceExcludes[n][R][c] = sum(cellExclude[n][R*3..R*3+2][c])
 	colSliceExcludes [9][3][9]int8
 
-	//blockExcludes[n][b] = x ：宫 b 的 n 排除了 x 个单元格
+	//blockExcludes[n][b] = x ：宫 b 有 x 个单元格排除了 n
 	blockExcludes [9][9]int8
 
 	//blockExcludeBits[n][b] 的每一位代表 宫 b 排除了哪些单元格
 	blockExcludeBits [9][9]int16
-
-	//blockSumExcludes[b] = x ： 宫 b 总共排除了 x 种可能性
-	//blockSumExcludes[b] = sum(blockExcludes[...][b])
-	blockSumExcludes [9]int8
 
 	//分支代数，每执行一次Copy就加1
 	branchGeneration int
@@ -222,7 +216,7 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	s.colSetCount[c]++
 	s.blockSetCount[b]++
 
-	if s.cellNumExcludes[r][c] < 8 {
+	if s.numExcludes[r][c] < 8 {
 		for n0 := range loop9 {
 			if n0 != n {
 				s.exclude(t, RCN(r, c, n0), NoNumCheck)
@@ -296,26 +290,21 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	}
 	s.cellExclude[n][r][c] = 1
 
-	b, _ := RCtoBP(r, c)
+	b, p := RCtoBP(r, c)
 	R, C := r/3, c/3
-	rr, cc := r-R*3, c-C*3
 
-	s.cellExcludeBits[r][c] |= 1 << n
-	cellExcludeBits := s.cellExcludeBits[r][c]
-	_ = add(&s.numExcludes[n], 1)
-	cellNumExcludes := add(&s.cellNumExcludes[r][c], 1)
+	s.numExcludeBits[r][c] |= 1 << n
+	cellExcludeBits := s.numExcludeBits[r][c]
+	cellNumExcludes := add(&s.numExcludes[r][c], 1)
 	rowExcludes := add(&s.rowExcludes[n][r], 1)
 	s.rowExcludeBits[n][r] |= 1 << c
 	rowExcludeBits := s.rowExcludeBits[n][r]
-	_ = add(&s.rowSumExcludes[r], 1)
 	colExcludes := add(&s.colExcludes[n][c], 1)
 	s.colExcludeBits[n][c] |= 1 << r
 	colExcludeBits := s.colExcludeBits[n][c]
-	_ = add(&s.colSumExcludes[c], 1)
 	blockExcludes := add(&s.blockExcludes[n][b], 1)
-	s.blockExcludeBits[n][b] |= 1 << (rr*3 + cc)
+	s.blockExcludeBits[n][b] |= 1 << p
 	blockExcludeBits := s.blockExcludeBits[n][b]
-	_ = add(&s.blockSumExcludes[b], 1)
 	rowSliceExcludes := add(&s.rowSliceExcludes[n][r][C], 1)
 	colSliceExcludes := add(&s.colSliceExcludes[n][R][c], 1)
 
@@ -341,7 +330,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	switch rowExcludes {
 	case 8:
 		for c0 := range loop9 {
-			if s.cellExclude[n][r][c0] == 0 && s.cells[r][c0] < 0 {
+			if s.cellExclude[n][r][c0] == 0 {
 				t.Confirm(RCN(r, c0, n))
 				break
 			}
@@ -356,7 +345,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	switch colExcludes {
 	case 8:
 		for r0 := range loop9 {
-			if s.cellExclude[n][r0][c] == 0 && s.cells[r0][c] < 0 {
+			if s.cellExclude[n][r0][c] == 0 {
 				t.Confirm(RCN(r0, c, n))
 				break
 			}
@@ -374,7 +363,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	loopRow:
 		for p0 := range loop9 {
 			r0, c0 := BPtoRC(b, p0)
-			if s.cellExclude[n][r0][c0] == 0 && s.cells[r0][c0] < 0 {
+			if s.cellExclude[n][r0][c0] == 0 {
 				t.Confirm(RCN(r0, c0, n))
 				break loopRow
 			}
@@ -387,9 +376,10 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 		t.Conflict(reason)
 	}
 
-	if s.branchGeneration >= *flagComplexGen {
+	if s.branchGeneration > *flagComplexGen {
 		return true
 	}
+	rr, cc := p/3, p%3
 
 	// 宫区数对 and 宫区三数组
 	// 同一宫区内，某数字只能出现在同一行或同一列的2个或3个单元格中，那同一宫、行或列的其他单元格排除这个数字
@@ -447,7 +437,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	if rcne.NumToColCheck() && cellNumExcludes >= int8(*flagComplexCell) && cellNumExcludes <= 7 {
 		var mask, count int
 		for r0 := range loop9 {
-			if s.cellExcludeBits[r0][c] == cellExcludeBits {
+			if s.numExcludeBits[r0][c] == cellExcludeBits {
 				mask |= 1 << r0
 				count++
 			}
@@ -471,7 +461,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	if rcne.NumToRowCheck() && cellNumExcludes >= int8(*flagComplexCell) && cellNumExcludes <= 7 {
 		var mask, count int
 		for c0 := range loop9 {
-			if s.cellExcludeBits[r][c0] == cellExcludeBits {
+			if s.numExcludeBits[r][c0] == cellExcludeBits {
 				mask |= 1 << c0
 				count++
 			}
@@ -496,7 +486,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 		var mask, count int
 		for p0 := range loop9 {
 			r0, c0 := BPtoRC(b, p0)
-			if s.cellExcludeBits[r0][c0] == cellExcludeBits {
+			if s.numExcludeBits[r0][c0] == cellExcludeBits {
 				mask |= 1 << p0
 				count++
 			}
@@ -535,7 +525,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 				if rowExcludeBits&(1<<c0) > 0 {
 					continue
 				}
-				if s.cellNumExcludes[r][c0] >= rowExcludes {
+				if s.numExcludes[r][c0] >= rowExcludes {
 					continue
 				}
 				for n1 := range loop9 {
@@ -559,7 +549,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 				if colExcludeBits&(1<<r0) > 0 {
 					continue
 				}
-				if s.cellNumExcludes[r0][c] >= colExcludes {
+				if s.numExcludes[r0][c] >= colExcludes {
 					continue
 				}
 				for n1 := range loop9 {
@@ -584,7 +574,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 					continue
 				}
 				r0, c0 := BPtoRC(b, p0)
-				if s.cellNumExcludes[r0][c0] >= blockExcludes {
+				if s.numExcludes[r0][c0] >= blockExcludes {
 					continue
 				}
 				for n1 := range loop9 {
@@ -666,11 +656,11 @@ func (s *Situation) RowColHash(rc RowCol) int {
 	return (rc.Row*317 + rc.Col*659 + s.setCount*531) % 997
 }
 
-func (s *Situation) ChooseGuessingCell1() []RowColNum {
+func (s *Situation) ChooseBranchCell1() []RowColNum {
 	type Candidate struct {
 		RowCol
 		// numCd, rowCd, colCd, blockCd int
-		Score int64
+		Score int
 	}
 	selected := Candidate{
 		RowCol: RowCol{-1, -1},
@@ -683,38 +673,30 @@ func (s *Situation) ChooseGuessingCell1() []RowColNum {
 		}
 		return s.RowColHash(candidate.RowCol) < s.RowColHash(selected.RowCol)
 	}
-	for r := range loop9 {
-		for c := range loop9 {
-			b, _ := RCtoBP(r, c)
-			if s.cellNumExcludes[r][c] >= 8 {
+	for r, rowNumExcludes := range s.numExcludes {
+		for c, cellNumExcludes := range rowNumExcludes {
+			if cellNumExcludes >= 8 {
 				continue
 			}
-			exNum := int64(9 - s.cellNumExcludes[r][c])
-			exRow := int64(9 - s.rowSumExcludes[r])
-			exCol := int64(9 - s.colSumExcludes[c])
-			exBlock := int64(9 - s.blockSumExcludes[b])
-			// setRow := int64(9 - s.rowSetCount[r])
-			// setCol := int64(9 - s.colSetCount[c])
-			// setBlock := int64(9 - s.blockSetCount[r/3][c/3])
+			b, _ := RCtoBP(r, c)
+			candiNum := int(9 - cellNumExcludes)
+			setRow := int(s.rowSetCount[r])
+			setCol := int(s.colSetCount[c])
+			setBlock := int(s.blockSetCount[b])
 
 			candidate := Candidate{
 				RowCol: RowCol{r, c},
-				Score:  1,
+				Score:  (candiNum << 10) + setRow + setCol + setBlock,
 			}
-			// candidate.Score = (exNum << 20) - exRow - exCol - exBlock //72306689
-			candidate.Score = (exNum << 20) - exRow*exCol*exBlock //71240920 best
-			// candidate.Score = (exNum << 20) - setRow - setCol - setBlock //75853735
-			// candidate.Score = (exNum << 20) - setRow*setCol*setBlock //78121998
-
 			if isBetter(candidate) {
 				selected = candidate
 			}
 		}
 	}
-	if selected.Row == -1 || selected.Col == -1 {
+	if selected.Row == -1 {
 		return nil
 	}
-	result := make([]RowColNum, 0, 9-int(s.cellNumExcludes[selected.Row][selected.Col]))
+	result := make([]RowColNum, 0, 9-int(s.numExcludes[selected.Row][selected.Col]))
 	for n := range loop9 {
 		if s.cellExclude[n][selected.Row][selected.Col] == 0 {
 			result = append(result, RCN(selected.Row, selected.Col, n))
@@ -727,10 +709,10 @@ func (s *Situation) ChooseGuessingCell1() []RowColNum {
 	return result
 }
 
-func (s *Situation) ChooseGuessingCell2() []RowColNum {
+func (s *Situation) ChooseBranchCell2() []RowColNum {
 	type Candidate struct {
 		RowColNum
-		Score int64
+		Score int
 	}
 	selected := Candidate{
 		RowColNum: RCN(-1, -1, -1),
@@ -742,28 +724,25 @@ func (s *Situation) ChooseGuessingCell2() []RowColNum {
 		}
 		return s.RowColHash(candidate.RowCol) < s.RowColHash(selected.RowCol)
 	}
-	for r := range loop9 {
-		for c := range loop9 {
-			b, _ := RCtoBP(r, c)
-			if s.cellNumExcludes[r][c] >= 8 {
+	for r, rowExcludes := range s.numExcludes {
+		for c, cellExcludes := range rowExcludes {
+			if cellExcludes >= 8 {
 				continue
 			}
-			exNum := int64(9 - s.cellNumExcludes[r][c])
-			setRow := int64(9 - s.rowSetCount[r])
-			setCol := int64(9 - s.colSetCount[c])
-			setBlock := int64(9 - s.blockSetCount[b])
-			preScore := (exNum << 20) - setRow - setCol - setBlock
+			b, _ := RCtoBP(r, c)
+			candiNum := int(9 - cellExcludes)
+			setRow := int(s.rowSetCount[r])
+			setCol := int(s.colSetCount[c])
+			setBlock := int(s.blockSetCount[b])
+			preScore := (candiNum << 20) + setRow + setCol + setBlock
 			for n := range loop9 {
 				if s.cellExclude[n][r][c] > 0 {
 					continue
 				}
-				//exRow := int64(9 - s.rowExcludes[n][r])
-				//exCol := int64(9 - s.colExcludes[n][c])
-				//exBlock := int64(9 - s.blockExcludes[n][r/3][c/3])
-				setNum := int64(9 - s.numSetCount[n])
+				setNum := int(s.numSetCount[n])
 				candidate := Candidate{
 					RowColNum: RCN(r, c, n),
-					Score:     preScore - setNum,
+					Score:     preScore + setNum,
 				}
 				// 分支选择算法
 				// candidate.Score = exNum //80950206
@@ -788,10 +767,10 @@ func (s *Situation) ChooseGuessingCell2() []RowColNum {
 // 选择哪个号码开始猜测，返回true表示n1比较好
 func (s *Situation) CompareNumInCell(r, c, n1, n2 int) bool {
 	//我也不知道为啥这个指标会有效，只是测试结果表明，这样蒙对的概率更高
-	score1 := int(s.numExcludes[n1])
-	score2 := int(s.numExcludes[n2])
+	score1 := int(s.numSetCount[n1])
+	score2 := int(s.numSetCount[n2])
 	if score1 != score2 {
-		return score1 < score2
+		return score1 > score2
 	}
 
 	base := r*61 + c*67 + s.setCount*71
