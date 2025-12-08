@@ -120,7 +120,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 			cellNumExcludes := s.numExcludes[rcn.Row][rcn.Col]
 			rowExcludes := s.rowExcludes[rcn.Num][rcn.Row]
 			colExcludes := s.colExcludes[rcn.Num][rcn.Col]
-			b, _ := RCtoBP(rcn.Row, rcn.Col)
+			b, _ := rcbp(rcn.Row, rcn.Col)
 			blockExcludes := s.blockExcludes[rcn.Num][b]
 			if s.Set(t, rcn) {
 				ctx.evalCount++

@@ -31,6 +31,11 @@ func init() {
 	}
 }
 
+func rcbp(r, c int) (b int, p int) {
+	v := rcbpMap[r][c]
+	return v.Row, v.Col
+}
+
 const (
 	CheckAll = 0
 
@@ -54,16 +59,6 @@ const (
 	NoNumToBlockCheck = 1 << 11
 	NoNumCheck        = NoNumToRowCheck | NoNumToColCheck | NoNumToBlockCheck
 )
-
-func RCtoBP(r, c int) (b int, p int) {
-	v := rcbpMap[r][c]
-	return v.Row, v.Col
-}
-
-func BPtoRC(b, p int) (r int, c int) {
-	v := rcbpMap[b][p]
-	return v.Row, v.Col
-}
 
 // Situation 代表9*9数独的一个局势
 // 所有行、列、单元格值都是0~8，显示的时候加1处理。
@@ -208,7 +203,7 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	}
 	s.cells[r][c] = int8(n)
 
-	b, p := RCtoBP(r, c)
+	b, p := rcbp(r, c)
 	R, C := r/3, c/3
 	s.setCount++
 	s.numSetCount[n]++
@@ -238,7 +233,7 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 			if p0 == p {
 				continue
 			}
-			r0, c0 := BPtoRC(b, p0)
+			r0, c0 := rcbp(b, p0)
 			s.exclude(t, RCN(r0, c0, n), NoBlockCheck)
 		}
 	}
@@ -290,25 +285,21 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	}
 	s.cellExclude[n][r][c] = 1
 
-	b, p := RCtoBP(r, c)
 	R, C := r/3, c/3
+	b, p := rcbp(r, c)
 
-	s.numExcludeBits[r][c] |= 1 << n
-	cellExcludeBits := s.numExcludeBits[r][c]
-	cellNumExcludes := add(&s.numExcludes[r][c], 1)
+	numExcludes := add(&s.numExcludes[r][c], 1)
+	numExcludeBits := bitOr(&s.numExcludeBits[r][c], n)
 	rowExcludes := add(&s.rowExcludes[n][r], 1)
-	s.rowExcludeBits[n][r] |= 1 << c
-	rowExcludeBits := s.rowExcludeBits[n][r]
+	rowExcludeBits := bitOr(&s.rowExcludeBits[n][r], c)
 	colExcludes := add(&s.colExcludes[n][c], 1)
-	s.colExcludeBits[n][c] |= 1 << r
-	colExcludeBits := s.colExcludeBits[n][c]
+	colExcludeBits := bitOr(&s.colExcludeBits[n][c], r)
 	blockExcludes := add(&s.blockExcludes[n][b], 1)
-	s.blockExcludeBits[n][b] |= 1 << p
-	blockExcludeBits := s.blockExcludeBits[n][b]
+	blockExcludeBits := bitOr(&s.blockExcludeBits[n][b], p)
 	rowSliceExcludes := add(&s.rowSliceExcludes[n][r][C], 1)
 	colSliceExcludes := add(&s.colSliceExcludes[n][R][c], 1)
 
-	switch cellNumExcludes {
+	switch numExcludes {
 	case 8:
 		if s.cells[r][c] >= 0 {
 			break
@@ -362,7 +353,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	case 8:
 	loopRow:
 		for p0 := range loop9 {
-			r0, c0 := BPtoRC(b, p0)
+			r0, c0 := rcbp(b, p0)
 			if s.cellExclude[n][r0][c0] == 0 {
 				t.Confirm(RCN(r0, c0, n))
 				break loopRow
@@ -434,20 +425,20 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	// 显性数组
 	// 同一行、列、宫中，N个单元格只能填入同样的N个数字，可以排除其他单元格填入这N个数字
 	// https://sudoku.com/zh/shu-du-gui-ze/xian-xing-shu-dui/
-	if rcne.NumToColCheck() && cellNumExcludes >= int8(*flagComplexCell) && cellNumExcludes <= 7 {
+	if rcne.NumToColCheck() && numExcludes >= int8(*flagComplexCell) && numExcludes <= 7 {
 		var mask, count int
 		for r0 := range loop9 {
-			if s.numExcludeBits[r0][c] == cellExcludeBits {
+			if s.numExcludeBits[r0][c] == numExcludeBits {
 				mask |= 1 << r0
 				count++
 			}
 		}
-		if count >= int(9-cellNumExcludes) {
+		if count >= int(9-numExcludes) {
 			for n0 := range loop9 {
-				if cellExcludeBits&(1<<n0) > 0 {
+				if numExcludeBits&(1<<n0) > 0 {
 					continue
 				}
-				if s.colExcludes[n0][c] >= cellNumExcludes {
+				if s.colExcludes[n0][c] >= numExcludes {
 					continue
 				}
 				for r1 := range loop9 {
@@ -458,20 +449,20 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 			}
 		}
 	}
-	if rcne.NumToRowCheck() && cellNumExcludes >= int8(*flagComplexCell) && cellNumExcludes <= 7 {
+	if rcne.NumToRowCheck() && numExcludes >= int8(*flagComplexCell) && numExcludes <= 7 {
 		var mask, count int
 		for c0 := range loop9 {
-			if s.numExcludeBits[r][c0] == cellExcludeBits {
+			if s.numExcludeBits[r][c0] == numExcludeBits {
 				mask |= 1 << c0
 				count++
 			}
 		}
-		if count >= int(9-cellNumExcludes) {
+		if count >= int(9-numExcludes) {
 			for n0 := range loop9 {
-				if cellExcludeBits&(1<<n0) > 0 {
+				if numExcludeBits&(1<<n0) > 0 {
 					continue
 				}
-				if s.rowExcludes[n0][r] >= cellNumExcludes {
+				if s.rowExcludes[n0][r] >= numExcludes {
 					continue
 				}
 				for c1 := range loop9 {
@@ -482,26 +473,26 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 			}
 		}
 	}
-	if rcne.NumToBlockCheck() && cellNumExcludes >= int8(*flagComplexCell) && cellNumExcludes <= 7 {
+	if rcne.NumToBlockCheck() && numExcludes >= int8(*flagComplexCell) && numExcludes <= 7 {
 		var mask, count int
 		for p0 := range loop9 {
-			r0, c0 := BPtoRC(b, p0)
-			if s.numExcludeBits[r0][c0] == cellExcludeBits {
+			r0, c0 := rcbp(b, p0)
+			if s.numExcludeBits[r0][c0] == numExcludeBits {
 				mask |= 1 << p0
 				count++
 			}
 		}
-		if count >= int(9-cellNumExcludes) {
+		if count >= int(9-numExcludes) {
 			for n0 := range loop9 {
-				if cellExcludeBits&(1<<n0) > 0 {
+				if numExcludeBits&(1<<n0) > 0 {
 					continue
 				}
-				if s.blockExcludes[n0][b] >= cellNumExcludes {
+				if s.blockExcludes[n0][b] >= numExcludes {
 					continue
 				}
 				for p1 := range loop9 {
 					if mask&(1<<p1) == 0 {
-						r1, c1 := BPtoRC(b, p1)
+						r1, c1 := rcbp(b, p1)
 						s.enqueueExclude(t, RCN(r1, c1, n0), NoBlockToNumCheck)
 					}
 				}
@@ -573,7 +564,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 				if blockExcludeBits&(1<<p0) > 0 {
 					continue
 				}
-				r0, c0 := BPtoRC(b, p0)
+				r0, c0 := rcbp(b, p0)
 				if s.numExcludes[r0][c0] >= blockExcludes {
 					continue
 				}
@@ -678,7 +669,7 @@ func (s *Situation) ChooseBranchCell1() []RowColNum {
 			if cellNumExcludes >= 8 {
 				continue
 			}
-			b, _ := RCtoBP(r, c)
+			b, _ := rcbp(r, c)
 			candiNum := int(9 - cellNumExcludes)
 			setRow := int(s.rowSetCount[r])
 			setCol := int(s.colSetCount[c])
@@ -729,7 +720,7 @@ func (s *Situation) ChooseBranchCell2() []RowColNum {
 			if cellExcludes >= 8 {
 				continue
 			}
-			b, _ := RCtoBP(r, c)
+			b, _ := rcbp(r, c)
 			candiNum := int(9 - cellExcludes)
 			setRow := int(s.rowSetCount[r])
 			setCol := int(s.colSetCount[c])
@@ -991,5 +982,10 @@ type GuessItem struct {
 
 func add(p *int8, n int8) int8 {
 	*p += n
+	return *p
+}
+
+func bitOr(p *int16, bitOffset int) int16 {
+	*p |= 1 << bitOffset
 	return *p
 }
