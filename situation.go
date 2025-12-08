@@ -425,7 +425,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	// 显性数组
 	// 同一行、列、宫中，N个单元格只能填入同样的N个数字，可以排除其他单元格填入这N个数字
 	// https://sudoku.com/zh/shu-du-gui-ze/xian-xing-shu-dui/
-	if rcne.NumToColCheck() && numExcludes >= int8(*flagComplexCell) && numExcludes <= 7 {
+	if rcne.NumToColCheck() && numExcludes == 7 {
 		var mask, count int
 		for r0 := range loop9 {
 			if s.numExcludeBits[r0][c] == numExcludeBits {
@@ -449,7 +449,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 			}
 		}
 	}
-	if rcne.NumToRowCheck() && numExcludes >= int8(*flagComplexCell) && numExcludes <= 7 {
+	if rcne.NumToRowCheck() && numExcludes == 7 {
 		var mask, count int
 		for c0 := range loop9 {
 			if s.numExcludeBits[r][c0] == numExcludeBits {
@@ -473,7 +473,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 			}
 		}
 	}
-	if rcne.NumToBlockCheck() && numExcludes >= int8(*flagComplexCell) && numExcludes <= 7 {
+	if rcne.NumToBlockCheck() && numExcludes == 7 {
 		var mask, count int
 		for p0 := range loop9 {
 			r0, c0 := rcbp(b, p0)
@@ -503,7 +503,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	// 隐性数组
 	// 同一行、列、宫中，两个数字只能填入同样的两个单元格，可以排除其他数字在这两单元格的可能性
 	// https://sudoku.com/zh/shu-du-gui-ze/yin-xing-shu-dui/
-	if rcne.RowToNumCheck() && rowExcludes >= int8(*flagComplexCell) && rowExcludes <= 7 {
+	if rcne.RowToNumCheck() && rowExcludes == 7 {
 		var mask, count int
 		for n0 := range loop9 {
 			if s.rowExcludeBits[n0][r] == rowExcludeBits {
@@ -527,7 +527,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 			}
 		}
 	}
-	if rcne.ColToNumCheck() && colExcludes >= int8(*flagComplexCell) && colExcludes <= 7 {
+	if rcne.ColToNumCheck() && colExcludes == 7 {
 		var mask, count int
 		for n0 := range loop9 {
 			if s.colExcludeBits[n0][c] == colExcludeBits {
@@ -551,7 +551,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 			}
 		}
 	}
-	if rcne.BlockToNumCheck() && blockExcludes >= int8(*flagComplexCell) && blockExcludes <= 7 {
+	if rcne.BlockToNumCheck() && blockExcludes == 7 {
 		var mask, count int
 		for n0 := range loop9 {
 			if s.blockExcludeBits[n0][b] == blockExcludeBits {
@@ -580,7 +580,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	// X-Wing
 	// 同一数字，在两行（列）中有相同的 2 个候选单元格，可以排除其他行（列）同列（行）填入 n 的可能性
 	// https://sudoku.com/zh/shu-du-gui-ze/x-yi-jie-fa/
-	if rcne.RowToColCheck() && rowExcludes >= int8(*flagComplexCell) && rowExcludes <= 7 {
+	if rcne.RowToColCheck() && rowExcludes == 7 {
 		var mask, count int
 		for r0 := range loop9 {
 			if s.rowExcludeBits[n][r0] == rowExcludeBits {
@@ -605,7 +605,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 			}
 		}
 	}
-	if rcne.ColToRowCheck() && colExcludes >= int8(*flagComplexCell) && colExcludes <= 7 {
+	if rcne.ColToRowCheck() && colExcludes == 7 {
 		var mask, count int
 		for c0 := range loop9 {
 			if s.colExcludeBits[n][c0] == colExcludeBits {

@@ -14,7 +14,6 @@ var (
 	flagShowStat            = flag.Bool("stat", false, "显示运算统计信息")
 	flagShowBranch          = flag.Bool("branch", false, "显示分支结构")
 	flagComplexGen          = flag.Int("complex-gen", 5, "在指定分支次数前使用高级排除规则")
-	flagComplexCell         = flag.Int("complex-cell", 7, "复杂规则应用范围，有效范围5-7")
 )
 
 const MsgUsage = `使用方法：
