@@ -50,8 +50,13 @@ func main() {
 		s.Show("失败", -1, -1)
 	}
 	if *flagShowStat {
+		var sumBranches int
+		for _, branches := range ctx.branchCount {
+			sumBranches += branches
+		}
 		fmt.Printf("总耗时：%v\n", dur)
-		fmt.Printf("总分支数：%d\n", ctx.guessesCount)
+		fmt.Printf("二叉分支数：%d\n", ctx.branchCount[2])
+		fmt.Printf("多叉支数：%d\n", sumBranches-ctx.branchCount[2])
 		fmt.Printf("总演算次数 %d\n", ctx.evalCount)
 	}
 }

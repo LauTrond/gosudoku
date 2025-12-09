@@ -18,22 +18,10 @@ var (
 		{0, 1, 2, 6, 7, 8},
 		{0, 1, 2, 3, 4, 5},
 	}
-	rcbpMap [9][9]RowCol
 )
 
-func init() {
-	for r := range loop9 {
-		for c := range loop9 {
-			b := r/3*3 + c/3
-			p := r%3*3 + c%3
-			rcbpMap[r][c] = RowCol{b, p}
-		}
-	}
-}
-
 func rcbp(r, c int) (b int, p int) {
-	v := rcbpMap[r][c]
-	return v.Row, v.Col
+	return r/3*3 + c/3, r%3*3 + c%3
 }
 
 const (
@@ -289,13 +277,13 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	b, p := rcbp(r, c)
 
 	numExcludes := add(&s.numExcludes[r][c], 1)
-	numExcludeBits := bitOr(&s.numExcludeBits[r][c], n)
+	numExcludeBits := setBit(&s.numExcludeBits[r][c], n)
 	rowExcludes := add(&s.rowExcludes[n][r], 1)
-	rowExcludeBits := bitOr(&s.rowExcludeBits[n][r], c)
+	rowExcludeBits := setBit(&s.rowExcludeBits[n][r], c)
 	colExcludes := add(&s.colExcludes[n][c], 1)
-	colExcludeBits := bitOr(&s.colExcludeBits[n][c], r)
+	colExcludeBits := setBit(&s.colExcludeBits[n][c], r)
 	blockExcludes := add(&s.blockExcludes[n][b], 1)
-	blockExcludeBits := bitOr(&s.blockExcludeBits[n][b], p)
+	blockExcludeBits := setBit(&s.blockExcludeBits[n][b], p)
 	rowSliceExcludes := add(&s.rowSliceExcludes[n][r][C], 1)
 	colSliceExcludes := add(&s.colSliceExcludes[n][R][c], 1)
 
@@ -648,6 +636,17 @@ func (s *Situation) RowColHash(rc RowCol) int {
 }
 
 func (s *Situation) ChooseBranchCell1() []RowColNum {
+	for nums := 2; nums <= 9; nums++ {
+		result := s.ChooseBranchCell1Nums(nums)
+		if len(result) > 0 {
+			return result
+		}
+	}
+	return nil
+}
+
+func (s *Situation) ChooseBranchCell1Nums(nums int) []RowColNum {
+	expectingExcludes := int8(9 - nums)
 	type Candidate struct {
 		RowCol
 		// numCd, rowCd, colCd, blockCd int
@@ -657,7 +656,6 @@ func (s *Situation) ChooseBranchCell1() []RowColNum {
 		RowCol: RowCol{-1, -1},
 		Score:  1 << 30,
 	}
-
 	isBetter := func(candidate Candidate) bool {
 		if candidate.Score != selected.Score {
 			return candidate.Score < selected.Score
@@ -666,18 +664,17 @@ func (s *Situation) ChooseBranchCell1() []RowColNum {
 	}
 	for r, rowNumExcludes := range s.numExcludes {
 		for c, cellNumExcludes := range rowNumExcludes {
-			if cellNumExcludes >= 8 {
+			if cellNumExcludes != expectingExcludes {
 				continue
 			}
 			b, _ := rcbp(r, c)
-			candiNum := int(9 - cellNumExcludes)
 			setRow := int(s.rowSetCount[r])
 			setCol := int(s.colSetCount[c])
 			setBlock := int(s.blockSetCount[b])
 
 			candidate := Candidate{
 				RowCol: RowCol{r, c},
-				Score:  (candiNum << 10) + setRow + setCol + setBlock,
+				Score:  setRow + setCol + setBlock,
 			}
 			if isBetter(candidate) {
 				selected = candidate
@@ -715,9 +712,10 @@ func (s *Situation) ChooseBranchCell2() []RowColNum {
 		}
 		return s.RowColHash(candidate.RowCol) < s.RowColHash(selected.RowCol)
 	}
+
 	for r, rowExcludes := range s.numExcludes {
 		for c, cellExcludes := range rowExcludes {
-			if cellExcludes >= 8 {
+			if cellExcludes != 7 {
 				continue
 			}
 			b, _ := rcbp(r, c)
@@ -812,27 +810,6 @@ type RowCol struct {
 	Row, Col int
 }
 
-func (rc RowCol) Block() RowCol {
-	return RowCol{
-		rc.Row / 3,
-		rc.Col / 3,
-	}
-}
-
-func (rc RowCol) LeftTop() RowCol {
-	return RowCol{
-		rc.Row * 3,
-		rc.Col * 3,
-	}
-}
-
-func (rc RowCol) Add(r, c int) RowCol {
-	return RowCol{
-		rc.Row + int(r),
-		rc.Col + int(c),
-	}
-}
-
 type RowColNum struct {
 	RowCol
 	Num int
@@ -841,15 +818,15 @@ type RowColNum struct {
 func RCN(r, c, n int) RowColNum {
 	return RowColNum{
 		RowCol: RowCol{
-			Row: int(r),
-			Col: int(c),
+			Row: r,
+			Col: c,
 		},
-		Num: int(n),
+		Num: n,
 	}
 }
 
 func (rcn RowColNum) Extract() (r, c, n int) {
-	return int(rcn.Row), int(rcn.Col), int(rcn.Num)
+	return rcn.Row, rcn.Col, rcn.Num
 }
 
 type RowColNumExclude struct {
@@ -985,7 +962,7 @@ func add(p *int8, n int8) int8 {
 	return *p
 }
 
-func bitOr(p *int16, bitOffset int) int16 {
+func setBit(p *int16, bitOffset int) int16 {
 	*p |= 1 << bitOffset
 	return *p
 }

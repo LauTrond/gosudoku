@@ -146,7 +146,8 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 
 	var mtx sync.Mutex
 	puzzlesCount := 0
-	guessesCount := 0
+	var branchCount [9]int
+	sumBranch := 0
 	evalCount := 0
 	succCount := 0
 
@@ -200,7 +201,10 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 		if len(ctx.solutions) == 1 {
 			succCount++
 		}
-		guessesCount += ctx.guessesCount
+		for idx, numBranches := range ctx.branchCount {
+			branchCount[idx] += numBranches
+			sumBranch += numBranches
+		}
 		evalCount += ctx.evalCount
 		mtx.Unlock()
 		s.Release()
@@ -255,8 +259,9 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 	printNamedValue("总局数", "%d", puzzlesCount)
 	printNamedValue("唯一解局数", "%d", succCount)
 	printNamedValue("解题速率(局/s)", "%.2f", float64(puzzlesCount)/dur.Seconds())
-	printNamedValue("分支数", "%d", guessesCount)
-	printNamedValue("分支率(次/局)", "%.2f", float64(guessesCount)/float64(puzzlesCount))
+	printNamedValue("总分支数", "%d", sumBranch)
+	printNamedValue("多叉分支数", "%d", sumBranch-branchCount[2])
+	printNamedValue("分支率(次/局)", "%.2f", float64(sumBranch)/float64(puzzlesCount))
 	printNamedValue("总演算次数", "%d", evalCount)
 }
 

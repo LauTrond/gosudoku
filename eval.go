@@ -6,9 +6,9 @@ import (
 )
 
 type SudokuContext struct {
-	evalCount    int
-	guessesCount int
-	solutions    []*[9][9]int8
+	evalCount   int
+	branchCount [9]int
+	solutions   []*[9][9]int8
 }
 
 func newSudokuContext() *SudokuContext {
@@ -56,14 +56,14 @@ loopBranch:
 		//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
 
 		//选取一个单元格和Num进行尝试
-		guess := s.ChooseBranchCell1()
+		candidates := s.ChooseBranchCell1()
 		// guess := s.ChooseGuessingCell2()
-		if len(guess) == 0 {
+		ctx.branchCount[len(candidates)]++
+		if len(candidates) == 0 {
 			break
 		}
-		ctx.guessesCount++
 		t = NewTrigger()
-		for _, selected := range guess {
+		for _, selected := range candidates {
 			s2 := s.Copy()
 			t2 := t.Copy()
 			s2.Set(t2, selected)
