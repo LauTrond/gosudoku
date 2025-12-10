@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"hash/crc64"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -147,7 +146,7 @@ func ParseSituationFromLine(line []byte) (*Situation, *Trigger) {
 }
 
 var situationPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(Situation)
 	},
 }
@@ -684,16 +683,12 @@ func (s *Situation) ChooseBranchCell1Nums(nums int) []RowColNum {
 	if selected.Row == -1 {
 		return nil
 	}
-	result := make([]RowColNum, 0, 9-int(s.numExcludes[selected.Row][selected.Col]))
+	result := make([]RowColNum, 0, nums)
 	for n := range loop9 {
 		if s.cellExclude[n][selected.Row][selected.Col] == 0 {
 			result = append(result, RCN(selected.Row, selected.Col, n))
 		}
 	}
-	sort.Slice(result, func(i, j int) bool {
-		return s.CompareNumInCell(selected.Row, selected.Col,
-			int(result[i].Num), int(result[j].Num))
-	})
 	return result
 }
 
@@ -872,7 +867,7 @@ func (rcne RowColNumExclude) NumToBlockCheck() bool {
 }
 
 var triggerPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &Trigger{
 			Confirms: make([]RowColNum, 0, 20),
 			excludes: make([]RowColNumExclude, 100),

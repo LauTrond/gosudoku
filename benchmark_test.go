@@ -33,9 +33,6 @@ func Test17Clue_MT(t *testing.T) {
 func TestHardest1905_Full(t *testing.T) {
 	(&BenchmarkConfig{
 		InputFile:  "assets/hardest_1905_11.txt",
-		OutputFile: "output/hardest_1905_11.txt",
-		// go tool pprof -http=:5001 output/hardest1905_full.pprof
-		PprofFile:  "output/hardest1905_full.pprof",
 		ComplexGen: 20,
 	}).Run(t)
 }
@@ -43,9 +40,6 @@ func TestHardest1905_Full(t *testing.T) {
 func TestHardest1905_Default(t *testing.T) {
 	(&BenchmarkConfig{
 		InputFile:  "assets/hardest_1905_11.txt",
-		OutputFile: "output/hardest_1905_11.txt",
-		// go tool pprof -http=:5002 output/hardest1905_default.pprof
-		PprofFile:  "output/hardest1905_default.pprof",
 		ComplexGen: 4,
 	}).Run(t)
 }
@@ -53,7 +47,13 @@ func TestHardest1905_Default(t *testing.T) {
 func TestHardest1905_Fast(t *testing.T) {
 	(&BenchmarkConfig{
 		InputFile:  "assets/hardest_1905_11.txt",
-		OutputFile: "output/hardest_1905_11.txt",
+		ComplexGen: -1,
+	}).Run(t)
+}
+
+func TestHardest1905_Benchmark(t *testing.T) {
+	(&BenchmarkConfig{
+		InputFile: "assets/hardest_1905_11.txt",
 		// go tool pprof -http=:5003 output/hardest1905_fast.pprof
 		PprofFile:  "output/hardest1905_fast.pprof",
 		ComplexGen: -1,
