@@ -51,7 +51,7 @@ func TestHardest1905_Fast(t *testing.T) {
 	}).Run(t)
 }
 
-func TestHardest1905_Benchmark(t *testing.T) {
+func TestHardest1905_BenchmarkFast(t *testing.T) {
 	(&BenchmarkConfig{
 		InputFile: "assets/hardest_1905_11.txt",
 		// go tool pprof -http=:5003 output/hardest1905_fast.pprof
@@ -178,6 +178,8 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 
 	proceed := func(line []byte) []byte {
 		s, trg := ParseSituationFromLine(line)
+		defer s.Release()
+		defer trg.Release()
 		ctx := newSudokuContext()
 		ctx.Run(s, trg)
 
@@ -207,7 +209,6 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 		}
 		evalCount += ctx.evalCount
 		mtx.Unlock()
-		s.Release()
 
 		return solutionLine
 	}

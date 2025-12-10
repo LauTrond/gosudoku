@@ -23,6 +23,22 @@ func rcbp(r, c int) (b int, p int) {
 	return r/3*3 + c/3, r%3*3 + c%3
 }
 
+// 从低位开始，返回bits第一个为0的位
+// 111111110 -> 0
+// 111111101 -> 1
+// 111101111 -> 4
+// 011111111 -> 9
+// 循环内有分支对性能有影响
+// 这个函数将循环分支独立出来，只要后续代码对这个函数的执行结果解耦，可以有效提高性能
+func pos0(bits int16) int {
+	for i := range loop9 {
+		if bits&(1<<i) == 0 {
+			return i
+		}
+	}
+	return -1
+}
+
 const (
 	CheckAll = 0
 
@@ -115,7 +131,7 @@ type Situation struct {
 func ParseSituation(puzzle string) (*Situation, *Trigger) {
 	s := NewSituation()
 	lines := strings.Split(strings.Trim(puzzle, "\n"), "\n")
-	t := &Trigger{}
+	t := NewTrigger()
 	for r, line := range lines {
 		if r > len(s.cells) {
 			panic(fmt.Errorf("row exceed"))
@@ -288,15 +304,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 
 	switch numExcludes {
 	case 8:
-		if s.cells[r][c] >= 0 {
-			break
-		}
-		for n0 := range loop9 {
-			if s.cellExclude[n0][r][c] == 0 {
-				t.Confirm(RCN(r, c, n0))
-				break
-			}
-		}
+		t.Confirm(RCN(r, c, pos0(numExcludeBits)))
 	case 9:
 		reason := ""
 		if *flagShowProcess {
@@ -307,12 +315,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 
 	switch rowExcludes {
 	case 8:
-		for c0 := range loop9 {
-			if s.cellExclude[n][r][c0] == 0 {
-				t.Confirm(RCN(r, c0, n))
-				break
-			}
-		}
+		t.Confirm(RCN(r, pos0(rowExcludeBits), n))
 	case 9:
 		reason := ""
 		if *flagShowProcess {
@@ -322,12 +325,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	}
 	switch colExcludes {
 	case 8:
-		for r0 := range loop9 {
-			if s.cellExclude[n][r0][c] == 0 {
-				t.Confirm(RCN(r0, c, n))
-				break
-			}
-		}
+		t.Confirm(RCN(pos0(colExcludeBits), c, n))
 	case 9:
 		reason := ""
 		if *flagShowProcess {
@@ -338,14 +336,9 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 
 	switch blockExcludes {
 	case 8:
-	loopRow:
-		for p0 := range loop9 {
-			r0, c0 := rcbp(b, p0)
-			if s.cellExclude[n][r0][c0] == 0 {
-				t.Confirm(RCN(r0, c0, n))
-				break loopRow
-			}
-		}
+		p0 := pos0(blockExcludeBits)
+		r0, c0 := rcbp(b, p0)
+		t.Confirm(RCN(r0, c0, n))
 	case 9:
 		reason := ""
 		if *flagShowProcess {
@@ -413,10 +406,11 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	// 同一行、列、宫中，N个单元格只能填入同样的N个数字，可以排除其他单元格填入这N个数字
 	// https://sudoku.com/zh/shu-du-gui-ze/xian-xing-shu-dui/
 	if rcne.NumToColCheck() && numExcludes == 7 {
-		var mask, count int
+		var count int
+		var mask [9]bool
 		for r0 := range loop9 {
 			if s.numExcludeBits[r0][c] == numExcludeBits {
-				mask |= 1 << r0
+				mask[r0] = true
 				count++
 			}
 		}
@@ -429,7 +423,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 					continue
 				}
 				for r1 := range loop9 {
-					if mask&(1<<r1) == 0 {
+					if !mask[r1] {
 						s.enqueueExclude(t, RCN(r1, c, n0), NoColToNumCheck)
 					}
 				}
@@ -437,10 +431,11 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 		}
 	}
 	if rcne.NumToRowCheck() && numExcludes == 7 {
-		var mask, count int
+		var count int
+		var mask [9]bool
 		for c0 := range loop9 {
 			if s.numExcludeBits[r][c0] == numExcludeBits {
-				mask |= 1 << c0
+				mask[c0] = true
 				count++
 			}
 		}
@@ -453,7 +448,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 					continue
 				}
 				for c1 := range loop9 {
-					if mask&(1<<c1) == 0 {
+					if !mask[c1] {
 						s.enqueueExclude(t, RCN(r, c1, n0), NoRowToNumCheck)
 					}
 				}
@@ -461,11 +456,12 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 		}
 	}
 	if rcne.NumToBlockCheck() && numExcludes == 7 {
-		var mask, count int
+		var count int
+		var mask [9]bool
 		for p0 := range loop9 {
 			r0, c0 := rcbp(b, p0)
 			if s.numExcludeBits[r0][c0] == numExcludeBits {
-				mask |= 1 << p0
+				mask[p0] = true
 				count++
 			}
 		}
@@ -478,7 +474,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 					continue
 				}
 				for p1 := range loop9 {
-					if mask&(1<<p1) == 0 {
+					if !mask[p1] {
 						r1, c1 := rcbp(b, p1)
 						s.enqueueExclude(t, RCN(r1, c1, n0), NoBlockToNumCheck)
 					}
@@ -491,10 +487,11 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	// 同一行、列、宫中，两个数字只能填入同样的两个单元格，可以排除其他数字在这两单元格的可能性
 	// https://sudoku.com/zh/shu-du-gui-ze/yin-xing-shu-dui/
 	if rcne.RowToNumCheck() && rowExcludes == 7 {
-		var mask, count int
+		var count int
+		var mask [9]bool
 		for n0 := range loop9 {
 			if s.rowExcludeBits[n0][r] == rowExcludeBits {
-				mask |= 1 << n0
+				mask[n0] = true
 				count++
 			}
 		}
@@ -507,7 +504,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 					continue
 				}
 				for n1 := range loop9 {
-					if mask&(1<<n1) == 0 {
+					if !mask[n1] {
 						s.enqueueExclude(t, RCN(r, c0, n1), NoRowToNumCheck)
 					}
 				}
@@ -515,10 +512,11 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 		}
 	}
 	if rcne.ColToNumCheck() && colExcludes == 7 {
-		var mask, count int
+		var count int
+		var mask [9]bool
 		for n0 := range loop9 {
 			if s.colExcludeBits[n0][c] == colExcludeBits {
-				mask |= 1 << n0
+				mask[n0] = true
 				count++
 			}
 		}
@@ -531,7 +529,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 					continue
 				}
 				for n1 := range loop9 {
-					if mask&(1<<n1) == 0 {
+					if !mask[n1] {
 						s.enqueueExclude(t, RCN(r0, c, n1), NoNumToColCheck)
 					}
 				}
@@ -539,10 +537,11 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 		}
 	}
 	if rcne.BlockToNumCheck() && blockExcludes == 7 {
-		var mask, count int
+		var count int
+		var mask [9]bool
 		for n0 := range loop9 {
 			if s.blockExcludeBits[n0][b] == blockExcludeBits {
-				mask |= 1 << n0
+				mask[n0] = true
 				count++
 			}
 		}
@@ -556,7 +555,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 					continue
 				}
 				for n1 := range loop9 {
-					if mask&(1<<n1) == 0 {
+					if !mask[n1] {
 						s.enqueueExclude(t, RCN(r0, c0, n1), NoNumToBlockCheck)
 					}
 				}
@@ -568,10 +567,11 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 	// 同一数字，在两行（列）中有相同的 2 个候选单元格，可以排除其他行（列）同列（行）填入 n 的可能性
 	// https://sudoku.com/zh/shu-du-gui-ze/x-yi-jie-fa/
 	if rcne.RowToColCheck() && rowExcludes == 7 {
-		var mask, count int
+		var count int
+		var mask [9]bool
 		for r0 := range loop9 {
 			if s.rowExcludeBits[n][r0] == rowExcludeBits {
-				mask |= 1 << r0
+				mask[r0] = true
 				count++
 			}
 		}
@@ -585,7 +585,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 					continue
 				}
 				for r1 := range loop9 {
-					if mask&(1<<r1) == 0 {
+					if !mask[r1] {
 						s.enqueueExclude(t, RCN(r1, c0, n), NoColToRowCheck)
 					}
 				}
@@ -593,10 +593,11 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 		}
 	}
 	if rcne.ColToRowCheck() && colExcludes == 7 {
-		var mask, count int
+		var count int
+		var mask [9]bool
 		for c0 := range loop9 {
 			if s.colExcludeBits[n][c0] == colExcludeBits {
-				mask |= 1 << c0
+				mask[c0] = true
 				count++
 			}
 		}
@@ -609,7 +610,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 					continue
 				}
 				for c1 := range loop9 {
-					if mask&(1<<c1) == 0 {
+					if !mask[c1] {
 						s.enqueueExclude(t, RCN(r0, c1, n), NoRowToColCheck)
 					}
 				}
@@ -829,6 +830,19 @@ type RowColNumExclude struct {
 	CheckFlag int
 }
 
+func RCNE(r, c, n, e int) RowColNumExclude {
+	return RowColNumExclude{
+		RowColNum: RowColNum{
+			RowCol: RowCol{
+				Row: r,
+				Col: c,
+			},
+			Num: n,
+		},
+		CheckFlag: e,
+	}
+}
+
 func (rcne RowColNumExclude) RowToColCheck() bool {
 	return rcne.CheckFlag&NoRowToColCheck == 0
 }
@@ -869,18 +883,16 @@ func (rcne RowColNumExclude) NumToBlockCheck() bool {
 var triggerPool = sync.Pool{
 	New: func() any {
 		return &Trigger{
-			Confirms: make([]RowColNum, 0, 20),
-			excludes: make([]RowColNumExclude, 100),
+			confirms: NewQueueCapacity(30),
+			excludes: NewQueueCapacity(100),
 		}
 	},
 }
 
 type Trigger struct {
-	Confirms    []RowColNum
-	excludes    []RowColNumExclude
-	excludeHead int
-	excludeTail int
-	Conflicts   []string
+	confirms  *Queue
+	excludes  *Queue
+	Conflicts []string
 }
 
 func NewTrigger() *Trigger {
@@ -890,9 +902,8 @@ func NewTrigger() *Trigger {
 }
 
 func (t *Trigger) Init() {
-	t.Confirms = t.Confirms[:0]
-	t.excludeHead = 0
-	t.excludeTail = 0
+	t.confirms.DiscardAll()
+	t.excludes.DiscardAll()
 	t.Conflicts = t.Conflicts[:0]
 }
 
@@ -901,39 +912,24 @@ func (t *Trigger) Release() {
 }
 
 func (t *Trigger) Confirm(rcn RowColNum) {
-	t.Confirms = append(t.Confirms, rcn)
+	t.confirms.Enqueue(RowColNumExclude{rcn, 0})
+}
+
+func (t *Trigger) GetConfirm() (RowColNum, bool) {
+	result, ok := t.confirms.Dequeue()
+	if !ok {
+		return RowColNum{}, false
+	} else {
+		return result.RowColNum, true
+	}
 }
 
 func (t *Trigger) EnqueueExclude(rcne RowColNumExclude) {
-	// for i := t.excludeHead; i < t.excludeTail; i++ {
-	// 	compare := &t.excludes[i%len(t.excludes)]
-	// 	if compare.RowColNum == rcne.RowColNum {
-	// 		compare.Direction = ExcludeDirectionNone
-	// 		return
-	// 	}
-	// }
-	if t.excludeTail-t.excludeHead >= len(t.excludes) {
-		newSize := max(len(t.excludes)*2, 100)
-		newExcludes := make([]RowColNumExclude, newSize)
-		for i := t.excludeHead; i < t.excludeTail; i++ {
-			newExcludes[i-t.excludeHead] = t.excludes[i%len(t.excludes)]
-		}
-		t.excludes = newExcludes
-		t.excludeTail = t.excludeTail - t.excludeHead
-		t.excludeHead = 0
-	}
-	t.excludes[t.excludeTail%len(t.excludes)] = rcne
-	t.excludeTail++
+	t.excludes.Enqueue(rcne)
 }
 
 func (t *Trigger) DequeueExclude() (RowColNumExclude, bool) {
-	if t.excludeTail-t.excludeHead > 0 {
-		result := t.excludes[t.excludeHead%len(t.excludes)]
-		t.excludeHead++
-		return result, true
-	} else {
-		return RowColNumExclude{}, false
-	}
+	return t.excludes.Dequeue()
 }
 
 func (t *Trigger) Conflict(msg string) {
@@ -942,14 +938,9 @@ func (t *Trigger) Conflict(msg string) {
 
 func (t *Trigger) Copy() *Trigger {
 	t2 := NewTrigger()
-	t2.Confirms = append(t2.Confirms, t.Confirms...)
+	t2.confirms.CopyFrom(t.confirms)
 	t2.Conflicts = append(t2.Conflicts, t.Conflicts...)
 	return t2
-}
-
-type GuessItem struct {
-	RowCol
-	Nums []int8
 }
 
 func add(p *int8, n int8) int8 {

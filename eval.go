@@ -62,7 +62,6 @@ loopBranch:
 		if len(candidates) == 0 {
 			break
 		}
-		t = NewTrigger()
 		for _, selected := range candidates {
 			s2 := s.Copy()
 			t2 := t.Copy()
@@ -86,13 +85,12 @@ loopBranch:
 				count += ctx.recurseEval(s2, t2, name)
 			}
 			s2.Release()
+			t2.Release()
 			s.Exclude(t, selected)
 			if len(t.Conflicts) > 0 {
-				t.Release()
 				break loopBranch
 			}
 			if count > 0 && *flagStopAtFirstSolution {
-				t.Release()
 				break loopBranch
 			}
 		}
@@ -109,50 +107,45 @@ loopBranch:
 
 // logicalEval 开始推断局势 s，直到没有找到确定的填充选项，不确保全部完成。
 // 如果返回false，表示这个局势有矛盾。
-// t会被释放，不能再使用
 func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
-	last := t
-	t = NewTrigger()
-	defer t.Release()
-	defer last.Release()
-	for len(last.Confirms) > 0 {
-		for _, rcn := range last.Confirms {
-			cellNumExcludes := s.numExcludes[rcn.Row][rcn.Col]
-			rowExcludes := s.rowExcludes[rcn.Num][rcn.Row]
-			colExcludes := s.colExcludes[rcn.Num][rcn.Col]
-			b, _ := rcbp(rcn.Row, rcn.Col)
-			blockExcludes := s.blockExcludes[rcn.Num][b]
-			if s.Set(t, rcn) {
-				ctx.evalCount++
+	for {
+		rcn, ok := t.GetConfirm()
+		if !ok {
+			break
+		}
+		cellNumExcludes := s.numExcludes[rcn.Row][rcn.Col]
+		rowExcludes := s.rowExcludes[rcn.Num][rcn.Row]
+		colExcludes := s.colExcludes[rcn.Num][rcn.Col]
+		b, _ := rcbp(rcn.Row, rcn.Col)
+		blockExcludes := s.blockExcludes[rcn.Num][b]
+		if s.Set(t, rcn) {
+			ctx.evalCount++
+			if *flagShowProcess {
+				title := ""
+				if cellNumExcludes == 8 {
+					title += "单元格唯一可以填的数\n"
+				}
+				if rowExcludes == 8 {
+					title += fmt.Sprintf("该行唯一可以填 %d 的位置\n", rcn.Num+1)
+				}
+				if colExcludes == 8 {
+					title += fmt.Sprintf("该列唯一可以填 %d 的位置\n", rcn.Num+1)
+				}
+				if blockExcludes == 8 {
+					title += fmt.Sprintf("该宫唯一可以填 %d 的位置\n", rcn.Num+1)
+				}
+				s.Show(strings.TrimSuffix(title, "\n"), int(rcn.Row), int(rcn.Col))
+			}
+			if len(t.Conflicts) > 0 {
 				if *flagShowProcess {
-					title := ""
-					if cellNumExcludes == 8 {
-						title += "单元格唯一可以填的数\n"
+					fmt.Println("发生矛盾：")
+					for _, msg := range t.Conflicts {
+						fmt.Println(msg)
 					}
-					if rowExcludes == 8 {
-						title += fmt.Sprintf("该行唯一可以填 %d 的位置\n", rcn.Num+1)
-					}
-					if colExcludes == 8 {
-						title += fmt.Sprintf("该列唯一可以填 %d 的位置\n", rcn.Num+1)
-					}
-					if blockExcludes == 8 {
-						title += fmt.Sprintf("该宫唯一可以填 %d 的位置\n", rcn.Num+1)
-					}
-					s.Show(strings.TrimSuffix(title, "\n"), int(rcn.Row), int(rcn.Col))
 				}
-				if len(t.Conflicts) > 0 {
-					if *flagShowProcess {
-						fmt.Println("发生矛盾：")
-						for _, msg := range t.Conflicts {
-							fmt.Println(msg)
-						}
-					}
-					return false
-				}
+				return false
 			}
 		}
-		last, t = t, last
-		t.Init()
 	}
 	if s.Completed() && *flagShowProcess {
 		fmt.Println("找到了一个解")
