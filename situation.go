@@ -9,13 +9,24 @@ import (
 )
 
 var (
-	loop9     [9]int
-	loop3     [3]int
-	loop3skip = [3][2]int{{1, 2}, {0, 2}, {0, 1}}
-	loop9skip = [3][6]int{
+	loop9      [9]int
+	loop3      [3]int
+	loop3skip  = [3][2]int{{1, 2}, {0, 2}, {0, 1}}
+	loop9skip3 = [3][6]int{
 		{3, 4, 5, 6, 7, 8},
 		{0, 1, 2, 6, 7, 8},
 		{0, 1, 2, 3, 4, 5},
+	}
+	loop9skip = [9][8]int{
+		{1, 2, 3, 4, 5, 6, 7, 8},
+		{0, 2, 3, 4, 5, 6, 7, 8},
+		{0, 1, 3, 4, 5, 6, 7, 8},
+		{0, 1, 2, 4, 5, 6, 7, 8},
+		{0, 1, 2, 3, 5, 6, 7, 8},
+		{0, 1, 2, 3, 4, 6, 7, 8},
+		{0, 1, 2, 3, 4, 5, 7, 8},
+		{0, 1, 2, 3, 4, 5, 6, 8},
+		{0, 1, 2, 3, 4, 5, 6, 7},
 	}
 )
 
@@ -219,31 +230,27 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	s.blockSetCount[b]++
 
 	if s.numExcludes[r][c] < 8 {
-		for n0 := range loop9 {
-			if n0 != n {
-				s.exclude(t, RCN(r, c, n0), NoNumCheck)
-			}
+		for _, n0 := range loop9skip[n] {
+			s.exclude(t, RCN(r, c, n0), NoNumCheck)
 		}
 	}
 	if s.colExcludes[n][c] < 8 {
-		for _, r0 := range loop9skip[R] {
+		for _, r0 := range loop9skip3[R] {
 			s.exclude(t, RCN(r0, c, n), NoColCheck)
 		}
 	}
 	if s.rowExcludes[n][r] < 8 {
-		for _, c0 := range loop9skip[C] {
+		for _, c0 := range loop9skip3[C] {
 			s.exclude(t, RCN(r, c0, n), NoRowCheck)
 		}
 	}
 	if s.blockExcludes[n][b] < 8 {
-		for p0 := range loop9 {
-			if p0 == p {
-				continue
-			}
+		for _, p0 := range loop9skip[p] {
 			r0, c0 := rcbp(b, p0)
 			s.exclude(t, RCN(r0, c0, n), NoBlockCheck)
 		}
 	}
+
 	s.drainExcludeQueue(t)
 	return true
 }
@@ -390,7 +397,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 		for _, rr0 := range loop3skip[rr] {
 			rr1 := 3 - rr - rr0
 			if rowSliceExcludes+s.rowSliceExcludes[n][R*3+rr0][C] == 6 {
-				for _, c0 := range loop9skip[C] {
+				for _, c0 := range loop9skip3[C] {
 					s.enqueueExclude(t, RCN(R*3+rr1, c0, n), NoRowToBlockCheck)
 				}
 			}
@@ -400,7 +407,7 @@ func (s *Situation) excludeOne(t *Trigger, rcne RowColNumExclude) bool {
 		for _, cc0 := range loop3skip[cc] {
 			cc1 := 3 - cc - cc0
 			if colSliceExcludes+s.colSliceExcludes[n][R][C*3+cc0] == 6 {
-				for _, r0 := range loop9skip[R] {
+				for _, r0 := range loop9skip3[R] {
 					s.enqueueExclude(t, RCN(r0, C*3+cc1, n), NoColToBlockCheck)
 				}
 			}
