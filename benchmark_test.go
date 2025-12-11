@@ -37,6 +37,15 @@ func TestHardest1905_Full(t *testing.T) {
 	}).Run(t)
 }
 
+func TestPprofHardest1905_Full(t *testing.T) {
+	(&BenchmarkConfig{
+		InputFile: "assets/hardest_1905_11.txt",
+		// go tool pprof -http=:5002 output/hardest1905_full.pprof
+		PprofFile:  "output/hardest1905_full.pprof",
+		ComplexGen: 20,
+	}).Run(t)
+}
+
 func TestHardest1905_Default(t *testing.T) {
 	(&BenchmarkConfig{
 		InputFile:  "assets/hardest_1905_11.txt",
@@ -51,7 +60,7 @@ func TestHardest1905_Fast(t *testing.T) {
 	}).Run(t)
 }
 
-func TestHardest1905_BenchmarkFast(t *testing.T) {
+func TestPprofHardest1905_Fast(t *testing.T) {
 	(&BenchmarkConfig{
 		InputFile: "assets/hardest_1905_11.txt",
 		// go tool pprof -http=:5003 output/hardest1905_fast.pprof
@@ -178,8 +187,8 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 
 	proceed := func(line []byte) []byte {
 		s, trg := ParseSituationFromLine(line)
-		defer s.Release()
-		defer trg.Release()
+		defer ReleaseSituation(s)
+		defer ReleaseTrigger(trg)
 		ctx := newSudokuContext()
 		ctx.Run(s, trg)
 

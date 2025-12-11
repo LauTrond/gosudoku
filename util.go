@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 type Queue struct {
 	values []RowColNumExclude
@@ -81,4 +84,128 @@ func (q *Queue) Dequeue() (item RowColNumExclude, ok bool) {
 
 func (q *Queue) DiscardAll() {
 	q.head = q.tail
+}
+
+type RowCol struct {
+	Row, Col int
+}
+
+type RowColNum struct {
+	RowCol
+	Num int
+}
+
+func RCN(r, c, n int) RowColNum {
+	return RowColNum{
+		RowCol: RowCol{
+			Row: r,
+			Col: c,
+		},
+		Num: n,
+	}
+}
+
+func (rcn RowColNum) Extract() (r, c, n int) {
+	return rcn.Row, rcn.Col, rcn.Num
+}
+
+type RowColNumExclude struct {
+	RowColNum
+	CheckFlag int
+}
+
+func RCNE(r, c, n, e int) RowColNumExclude {
+	return RowColNumExclude{
+		RowColNum: RowColNum{
+			RowCol: RowCol{
+				Row: r,
+				Col: c,
+			},
+			Num: n,
+		},
+		CheckFlag: e,
+	}
+}
+
+func (rcne RowColNumExclude) RowToColCheck() bool {
+	return rcne.CheckFlag&NoRowToColCheck == 0
+}
+func (rcne RowColNumExclude) RowToBlockCheck() bool {
+	return rcne.CheckFlag&NoRowToBlockCheck == 0
+}
+func (rcne RowColNumExclude) RowToNumCheck() bool {
+	return rcne.CheckFlag&NoRowToNumCheck == 0
+}
+func (rcne RowColNumExclude) ColToRowCheck() bool {
+	return rcne.CheckFlag&NoColToRowCheck == 0
+}
+func (rcne RowColNumExclude) ColToBlockCheck() bool {
+	return rcne.CheckFlag&NoColToBlockCheck == 0
+}
+func (rcne RowColNumExclude) ColToNumCheck() bool {
+	return rcne.CheckFlag&NoColToNumCheck == 0
+}
+func (rcne RowColNumExclude) BlockToRowCheck() bool {
+	return rcne.CheckFlag&NoBlockToRowCheck == 0
+}
+func (rcne RowColNumExclude) BlockToColCheck() bool {
+	return rcne.CheckFlag&NoBlockToColCheck == 0
+}
+func (rcne RowColNumExclude) BlockToNumCheck() bool {
+	return rcne.CheckFlag&NoBlockToNumCheck == 0
+}
+func (rcne RowColNumExclude) NumToRowCheck() bool {
+	return rcne.CheckFlag&NoNumToRowCheck == 0
+}
+func (rcne RowColNumExclude) NumToColCheck() bool {
+	return rcne.CheckFlag&NoNumToColCheck == 0
+}
+func (rcne RowColNumExclude) NumToBlockCheck() bool {
+	return rcne.CheckFlag&NoNumToBlockCheck == 0
+}
+
+func add(p *int8, n int8) int8 {
+	*p += n
+	return *p
+}
+
+func setBit(p *int16, bitOffset int) int16 {
+	*p |= 1 << bitOffset
+	return *p
+}
+
+type BranchChoices struct {
+	tmpArray [9]RowColNum
+	Choices  []RowColNum
+}
+
+func (c *BranchChoices) Init() {
+	c.Choices = c.tmpArray[:0]
+}
+
+func (c *BranchChoices) Size() int {
+	if c == nil {
+		return 0
+	}
+	return len(c.Choices)
+}
+
+func (c *BranchChoices) Add(rcn RowColNum) {
+	c.Choices = append(c.Choices, rcn)
+}
+
+var branchChoicesPool = sync.Pool{
+	New: func() any {
+		return new(BranchChoices)
+	},
+}
+
+func NewBranchChoices() *BranchChoices {
+	c := branchChoicesPool.Get().(*BranchChoices)
+	c.Init()
+	return c
+}
+
+func ReleaseBranchChoices(c *BranchChoices) {
+	branchChoicesPool.Put(c)
 }

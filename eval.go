@@ -58,13 +58,13 @@ loopBranch:
 		//选取一个单元格和Num进行尝试
 		candidates := s.ChooseBranchCell1()
 		// guess := s.ChooseGuessingCell2()
-		ctx.branchCount[len(candidates)]++
-		if len(candidates) == 0 {
+		ctx.branchCount[candidates.Size()]++
+		if candidates.Size() == 0 {
 			break
 		}
-		for _, selected := range candidates {
-			s2 := s.Copy()
-			t2 := t.Copy()
+		for _, selected := range candidates.Choices {
+			s2 := DuplicateSituation(s)
+			t2 := DuplicateTrigger(t)
 			s2.Set(t2, selected)
 			ctx.evalCount++
 			if *flagShowProcess {
@@ -84,16 +84,15 @@ loopBranch:
 				}
 				count += ctx.recurseEval(s2, t2, name)
 			}
-			s2.Release()
-			t2.Release()
+			ReleaseSituation(s2)
+			ReleaseTrigger(t2)
 			s.Exclude(t, selected)
-			if len(t.Conflicts) > 0 {
-				break loopBranch
-			}
-			if count > 0 && *flagStopAtFirstSolution {
+			if len(t.Conflicts) > 0 || count > 0 && *flagStopAtFirstSolution {
+				ReleaseBranchChoices(candidates)
 				break loopBranch
 			}
 		}
+		ReleaseBranchChoices(candidates)
 	}
 	if *flagShowBranch {
 		txt := "无解"

@@ -183,15 +183,19 @@ func NewSituation() *Situation {
 	return s
 }
 
-func (s *Situation) Release() {
+func ReleaseSituation(s *Situation) {
 	situationPool.Put(s)
 }
 
-func (s *Situation) Copy() *Situation {
+func DuplicateSituation(s *Situation) *Situation {
 	s2 := situationPool.Get().(*Situation)
-	*s2 = *s
-	s2.branchGeneration++
+	s2.CopyFrom(s)
 	return s2
+}
+
+func (s *Situation) CopyFrom(x *Situation) {
+	*s = *x
+	s.branchGeneration++
 }
 
 func (s *Situation) Count() int {
@@ -635,17 +639,17 @@ func (s *Situation) RowColHash(rc RowCol) int {
 	return (rc.Row*317 + rc.Col*659 + s.setCount*531) % 997
 }
 
-func (s *Situation) ChooseBranchCell1() []RowColNum {
+func (s *Situation) ChooseBranchCell1() *BranchChoices {
 	for nums := 2; nums <= 9; nums++ {
 		result := s.ChooseBranchCell1Nums(nums)
-		if len(result) > 0 {
+		if result.Size() > 0 {
 			return result
 		}
 	}
 	return nil
 }
 
-func (s *Situation) ChooseBranchCell1Nums(nums int) []RowColNum {
+func (s *Situation) ChooseBranchCell1Nums(nums int) *BranchChoices {
 	expectingExcludes := int8(9 - nums)
 	type Candidate struct {
 		RowCol
@@ -684,16 +688,27 @@ func (s *Situation) ChooseBranchCell1Nums(nums int) []RowColNum {
 	if selected.Row == -1 {
 		return nil
 	}
-	result := make([]RowColNum, 0, nums)
+	r, c := selected.Row, selected.Col
+	numExcludeBits := s.numExcludeBits[r][c]
+	var tmpArray [9]int
+	candidateNums := tmpArray[:0]
 	for n := range loop9 {
-		if s.cellExclude[n][selected.Row][selected.Col] == 0 {
-			result = append(result, RCN(selected.Row, selected.Col, n))
+		if numExcludeBits&(1<<n) == 0 {
+			candidateNums = append(candidateNums, n)
 		}
+	}
+	if nums == 2 && s.CompareNumInCell(r, c, candidateNums[1], candidateNums[0]) {
+		candidateNums[0], candidateNums[1] = candidateNums[1], candidateNums[0]
+	}
+
+	result := NewBranchChoices()
+	for _, n := range candidateNums {
+		result.Add(RCN(r, c, n))
 	}
 	return result
 }
 
-func (s *Situation) ChooseBranchCell2() []RowColNum {
+func (s *Situation) ChooseBranchCell2() *BranchChoices {
 	type Candidate struct {
 		RowColNum
 		Score int
@@ -746,7 +761,9 @@ func (s *Situation) ChooseBranchCell2() []RowColNum {
 	if selected.Row == -1 {
 		return nil
 	}
-	return []RowColNum{selected.RowColNum}
+	result := NewBranchChoices()
+	result.Choices = append(result.Choices, selected.RowColNum)
+	return result
 }
 
 // 选择哪个号码开始猜测，返回true表示n1比较好
@@ -802,84 +819,6 @@ func (s *Situation) Completed() bool {
 	return s.setCount == 9*9
 }
 
-type RowCol struct {
-	Row, Col int
-}
-
-type RowColNum struct {
-	RowCol
-	Num int
-}
-
-func RCN(r, c, n int) RowColNum {
-	return RowColNum{
-		RowCol: RowCol{
-			Row: r,
-			Col: c,
-		},
-		Num: n,
-	}
-}
-
-func (rcn RowColNum) Extract() (r, c, n int) {
-	return rcn.Row, rcn.Col, rcn.Num
-}
-
-type RowColNumExclude struct {
-	RowColNum
-	CheckFlag int
-}
-
-func RCNE(r, c, n, e int) RowColNumExclude {
-	return RowColNumExclude{
-		RowColNum: RowColNum{
-			RowCol: RowCol{
-				Row: r,
-				Col: c,
-			},
-			Num: n,
-		},
-		CheckFlag: e,
-	}
-}
-
-func (rcne RowColNumExclude) RowToColCheck() bool {
-	return rcne.CheckFlag&NoRowToColCheck == 0
-}
-func (rcne RowColNumExclude) RowToBlockCheck() bool {
-	return rcne.CheckFlag&NoRowToBlockCheck == 0
-}
-func (rcne RowColNumExclude) RowToNumCheck() bool {
-	return rcne.CheckFlag&NoRowToNumCheck == 0
-}
-func (rcne RowColNumExclude) ColToRowCheck() bool {
-	return rcne.CheckFlag&NoColToRowCheck == 0
-}
-func (rcne RowColNumExclude) ColToBlockCheck() bool {
-	return rcne.CheckFlag&NoColToBlockCheck == 0
-}
-func (rcne RowColNumExclude) ColToNumCheck() bool {
-	return rcne.CheckFlag&NoColToNumCheck == 0
-}
-func (rcne RowColNumExclude) BlockToRowCheck() bool {
-	return rcne.CheckFlag&NoBlockToRowCheck == 0
-}
-func (rcne RowColNumExclude) BlockToColCheck() bool {
-	return rcne.CheckFlag&NoBlockToColCheck == 0
-}
-func (rcne RowColNumExclude) BlockToNumCheck() bool {
-	return rcne.CheckFlag&NoBlockToNumCheck == 0
-}
-func (rcne RowColNumExclude) NumToRowCheck() bool {
-	return rcne.CheckFlag&NoNumToRowCheck == 0
-}
-func (rcne RowColNumExclude) NumToColCheck() bool {
-	return rcne.CheckFlag&NoNumToColCheck == 0
-}
-func (rcne RowColNumExclude) NumToBlockCheck() bool {
-	return rcne.CheckFlag&NoNumToBlockCheck == 0
-}
-
 var triggerPool = sync.Pool{
 	New: func() any {
 		return &Trigger{
@@ -889,26 +828,32 @@ var triggerPool = sync.Pool{
 	},
 }
 
-type Trigger struct {
-	confirms  *Queue
-	excludes  *Queue
-	Conflicts []string
-}
-
 func NewTrigger() *Trigger {
 	t := triggerPool.Get().(*Trigger)
 	t.Init()
 	return t
 }
 
+func ReleaseTrigger(t *Trigger) {
+	triggerPool.Put(t)
+}
+
+func DuplicateTrigger(t *Trigger) *Trigger {
+	t2 := NewTrigger()
+	t2.CopyFrom(t)
+	return t2
+}
+
+type Trigger struct {
+	confirms  *Queue
+	excludes  *Queue
+	Conflicts []string
+}
+
 func (t *Trigger) Init() {
 	t.confirms.DiscardAll()
 	t.excludes.DiscardAll()
 	t.Conflicts = t.Conflicts[:0]
-}
-
-func (t *Trigger) Release() {
-	triggerPool.Put(t)
 }
 
 func (t *Trigger) Confirm(rcn RowColNum) {
@@ -936,19 +881,7 @@ func (t *Trigger) Conflict(msg string) {
 	t.Conflicts = append(t.Conflicts, msg)
 }
 
-func (t *Trigger) Copy() *Trigger {
-	t2 := NewTrigger()
-	t2.confirms.CopyFrom(t.confirms)
-	t2.Conflicts = append(t2.Conflicts, t.Conflicts...)
-	return t2
-}
-
-func add(p *int8, n int8) int8 {
-	*p += n
-	return *p
-}
-
-func setBit(p *int16, bitOffset int) int16 {
-	*p |= 1 << bitOffset
-	return *p
+func (t *Trigger) CopyFrom(x *Trigger) {
+	t.confirms.CopyFrom(x.confirms)
+	t.Conflicts = append(t.Conflicts, x.Conflicts...)
 }

@@ -75,7 +75,7 @@ func Test17ClueContest(t *testing.T) {
 					return
 				}
 				solution := ctx.solutions[0]
-				s.Release()
+				ReleaseSituation(s)
 
 				outline := make([]byte, 81+1+81+1)
 				copy(outline[0:81], line)

@@ -52,7 +52,7 @@ func TestCPUProfile(t *testing.T) {
 			s, trg := ParseSituationFromLine(puzzle)
 			ctx := newSudokuContext()
 			ctx.Run(s, trg)
-			s.Release()
+			ReleaseSituation(s)
 		}
 	}
 
