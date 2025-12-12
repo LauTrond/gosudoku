@@ -19,7 +19,7 @@
     ....81...
     ..2....5.
     .4....3..
-    " | go run -process github.com/LauTrond/gosudoku
+    " | go run --process github.com/LauTrond/gosudoku
     
     =============================
     <17> 开始
@@ -104,7 +104,7 @@ puzzles/hard-02.txt 是某个新闻号称"最难的数独"，本项目找到唯�
     ..85...1.
     .9....4..
     
-    $ go run . -stat puzzles/hard-02.txt
+    $ go run . --stat puzzles/hard-02.txt
       
     找到了 1 个解
     =============================
@@ -128,13 +128,13 @@ puzzles/hard-02.txt 是某个新闻号称"最难的数独"，本项目找到唯�
 benchmark_test.go 包含测试数据集，"HardestDatabase110626" 375 题、“HardestDatabase1905_11” 48766 题：
 
     # “HardestDatabase110626” 单线程
-    $ go test . -v -count=1 -test.run Hardest1106_ST
+    $ go test . --test.v --test.count=1 --test.run Hardest1106_ST
 
     # “HardestDatabase1905_11” 多线程
-    $ go test . -v -count=1 -test.run Hardest1905_MT
+    $ go test . --test.v --test.count=1 --test.run Hardest1905_MT
     
     # “HardestDatabase1905_11” 单线程性能分析
-    $ go test . -v -count=1 -test.run Hardest1905_Pprof
+    $ go test . --test.v --test.count=1 --test.run Hardest1905_Pprof
 
 ## 如何做到 ##
 
