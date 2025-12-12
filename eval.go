@@ -6,18 +6,25 @@ import (
 )
 
 type SudokuContext struct {
+	ShowProcess         bool
+	ShowBranch          bool
+	StopAtFirstSolution bool
+
 	evalCount   int
 	branchCount [9]int
 	solutions   []*[9][9]int8
 }
 
-func newSudokuContext() *SudokuContext {
+func NewSudokuContext() *SudokuContext {
 	return &SudokuContext{}
 }
 
 func (ctx *SudokuContext) Run(s *Situation, t *Trigger) int {
+	if ctx.ShowProcess {
+		s.Show("开始", -1, -1)
+	}
 	if len(t.Conflicts) > 0 {
-		if *flagShowProcess {
+		if ctx.ShowProcess {
 			fmt.Println("开局矛盾：")
 			for _, msg := range t.Conflicts {
 				fmt.Println(msg)
@@ -32,17 +39,17 @@ func (ctx *SudokuContext) Run(s *Situation, t *Trigger) int {
 // 如果返回 0，表示这个局势有矛盾，不存在正确的解答。
 // t会被释放，不能再使用
 func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName string) int {
-	if *flagShowBranch {
+	if ctx.ShowBranch {
 		fmt.Println(branchName, "开始")
 	}
 	if !ctx.logicalEval(s, t) {
-		if *flagShowBranch {
+		if ctx.ShowBranch {
 			fmt.Println(branchName, fmt.Sprintf("演算到 <%d> 矛盾", s.Count()))
 		}
 		return 0
 	}
 	if s.Completed() {
-		if *flagShowBranch {
+		if ctx.ShowBranch {
 			fmt.Println(branchName, "找到解")
 		}
 		cells := s.cells
@@ -62,13 +69,14 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 	for _, selected := range candidates.Choices {
 		s2 := DuplicateSituation(s)
 		t2 := DuplicateTrigger(t)
+		s2.branchGeneration++
 		s2.Set(t2, selected)
 		ctx.evalCount++
-		if *flagShowProcess {
+		if ctx.ShowProcess {
 			s2.Show("在可能的选项里猜一个", int(selected.Row), int(selected.Col))
 		}
 		if len(t2.Conflicts) > 0 {
-			if *flagShowProcess {
+			if ctx.ShowProcess {
 				fmt.Println("发生矛盾：")
 				for _, c := range t2.Conflicts {
 					fmt.Println(c.String())
@@ -76,20 +84,20 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 			}
 		} else {
 			name := ""
-			if *flagShowBranch {
+			if ctx.ShowBranch {
 				name = branchName + " " + fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), selected.Row+1, selected.Col+1, selected.Num+1)
 			}
 			count += ctx.recurseEval(s2, t2, name)
 		}
 		ReleaseSituation(s2)
 		ReleaseTrigger(t2)
-		if len(t.Conflicts) > 0 || count > 0 && *flagStopAtFirstSolution {
+		if len(t.Conflicts) > 0 || count > 0 && ctx.StopAtFirstSolution {
 			break
 		}
 	}
 	ReleaseBranchChoices(candidates)
 
-	if *flagShowBranch {
+	if ctx.ShowBranch {
 		txt := "无解"
 		if count > 0 {
 			txt = fmt.Sprintf("%d 个解", count)
@@ -114,7 +122,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 		blockExcludes := countTrueBits(s.blockExcludeBits[rcn.Num][b])
 		if s.Set(t, rcn) {
 			ctx.evalCount++
-			if *flagShowProcess {
+			if ctx.ShowProcess {
 				title := ""
 				if cellNumExcludes == 8 {
 					title += "单元格唯一可以填的数\n"
@@ -131,7 +139,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 				s.Show(strings.TrimSuffix(title, "\n"), int(rcn.Row), int(rcn.Col))
 			}
 			if len(t.Conflicts) > 0 {
-				if *flagShowProcess {
+				if ctx.ShowProcess {
 					fmt.Println("发生矛盾：")
 					for _, msg := range t.Conflicts {
 						fmt.Println(msg)
@@ -141,7 +149,7 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 			}
 		}
 	}
-	if s.Completed() && *flagShowProcess {
+	if s.Completed() && ctx.ShowProcess {
 		fmt.Println("找到了一个解")
 	}
 	return true

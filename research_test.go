@@ -13,7 +13,7 @@ func TestBranch(t *testing.T) {
 	logicalEval(s, tgr)
 	s.Show("初始", -1, -1)
 
-	ctx := newSudokuContext()
+	ctx := NewSudokuContext()
 	count := ctx.recurseEval(DuplicateSituation(s), NewTrigger(), fmt.Sprintf("<%d>", s.Count()))
 	if count != 1 {
 		t.Fatalf("非唯一解：%d", count)

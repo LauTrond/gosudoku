@@ -32,12 +32,12 @@ func main() {
 	puzzle := loadPuzzle()
 	s, t := ParseSituation(puzzle)
 
-	if *flagShowProcess {
-		s.Show("开始", -1, -1)
+	ctx := &SudokuContext{
+		ShowProcess:         *flagShowProcess,
+		ShowBranch:          *flagShowBranch,
+		StopAtFirstSolution: *flagStopAtFirstSolution,
 	}
-
 	startTime := time.Now()
-	ctx := newSudokuContext()
 	count := ctx.Run(s, t)
 	dur := time.Since(startTime)
 	if count > 0 {

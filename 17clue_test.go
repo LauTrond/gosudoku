@@ -70,7 +70,7 @@ func Test17ClueContest(t *testing.T) {
 
 				line = bytes.TrimSuffix(line, []byte("\n"))
 				s, trg := ParseSituationFromLine(line)
-				ctx := newSudokuContext()
+				ctx := NewSudokuContext()
 				ctx.Run(s, trg)
 				if len(ctx.solutions) != 1 {
 					t.Error("unsolved:" + string(line))

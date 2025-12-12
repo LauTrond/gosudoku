@@ -117,7 +117,6 @@ func DuplicateSituation(s *Situation) *Situation {
 
 func (s *Situation) CopyFrom(x *Situation) {
 	*s = *x
-	s.branchGeneration++
 }
 
 func (s *Situation) Count() int {

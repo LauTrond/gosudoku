@@ -154,7 +154,7 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 		s, trg := ParseSituationFromLine(line)
 		defer ReleaseSituation(s)
 		defer ReleaseTrigger(trg)
-		ctx := newSudokuContext()
+		ctx := NewSudokuContext()
 		ctx.Run(s, trg)
 
 		var solutionLine []byte
