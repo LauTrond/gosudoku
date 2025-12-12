@@ -13,7 +13,6 @@ var (
 	flagStopAtFirstSolution = flag.Bool("one", false, "找到一个解即停止")
 	flagShowStat            = flag.Bool("stat", false, "显示运算统计信息")
 	flagShowBranch          = flag.Bool("branch", false, "显示分支结构")
-	flagComplexGen          = flag.Int("complex-gen", 5, "在指定分支次数前使用高级排除规则")
 )
 
 const MsgUsage = `使用方法：

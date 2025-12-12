@@ -35,65 +35,60 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 	if *flagShowBranch {
 		fmt.Println(branchName, "开始")
 	}
-	var count int
-loopBranch:
-	for {
-		if !ctx.logicalEval(s, t) {
-			if *flagShowBranch {
-				fmt.Println(branchName, fmt.Sprintf("演算到 <%d> 矛盾", s.Count()))
-			}
-			break
+	if !ctx.logicalEval(s, t) {
+		if *flagShowBranch {
+			fmt.Println(branchName, fmt.Sprintf("演算到 <%d> 矛盾", s.Count()))
 		}
-		if s.Completed() {
-			if *flagShowBranch {
-				fmt.Println(branchName, "找到解")
-			}
-			cells := s.cells
-			ctx.solutions = append(ctx.solutions, &cells)
-			count++
-			break
-		}
-		//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
-
-		//选取一个单元格和Num进行尝试
-		candidates := s.ChooseBranchCell1()
-		// guess := s.ChooseGuessingCell2()
-		ctx.branchCount[candidates.Size()]++
-		if candidates.Size() == 0 {
-			break
-		}
-		for _, selected := range candidates.Choices {
-			s2 := DuplicateSituation(s)
-			t2 := DuplicateTrigger(t)
-			s2.Set(t2, selected)
-			ctx.evalCount++
-			if *flagShowProcess {
-				s2.Show("在可能的选项里猜一个", int(selected.Row), int(selected.Col))
-			}
-			if len(t2.Conflicts) > 0 {
-				if *flagShowProcess {
-					fmt.Println("发生矛盾：")
-					for _, msg := range t2.Conflicts {
-						fmt.Println(msg)
-					}
-				}
-			} else {
-				name := ""
-				if *flagShowBranch {
-					name = branchName + " " + fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), selected.Row+1, selected.Col+1, selected.Num+1)
-				}
-				count += ctx.recurseEval(s2, t2, name)
-			}
-			ReleaseSituation(s2)
-			ReleaseTrigger(t2)
-			s.Exclude(t, selected)
-			if len(t.Conflicts) > 0 || count > 0 && *flagStopAtFirstSolution {
-				ReleaseBranchChoices(candidates)
-				break loopBranch
-			}
-		}
-		ReleaseBranchChoices(candidates)
+		return 0
 	}
+	if s.Completed() {
+		if *flagShowBranch {
+			fmt.Println(branchName, "找到解")
+		}
+		cells := s.cells
+		ctx.solutions = append(ctx.solutions, &cells)
+		return 1
+	}
+	//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
+
+	//选取一个单元格和Num进行尝试
+	candidates := s.ChooseBranchCell1()
+	// guess := s.ChooseGuessingCell2()
+	ctx.branchCount[candidates.Size()]++
+	if candidates.Size() == 0 {
+		return 0
+	}
+	var count int
+	for _, selected := range candidates.Choices {
+		s2 := DuplicateSituation(s)
+		t2 := DuplicateTrigger(t)
+		s2.Set(t2, selected)
+		ctx.evalCount++
+		if *flagShowProcess {
+			s2.Show("在可能的选项里猜一个", int(selected.Row), int(selected.Col))
+		}
+		if len(t2.Conflicts) > 0 {
+			if *flagShowProcess {
+				fmt.Println("发生矛盾：")
+				for _, c := range t2.Conflicts {
+					fmt.Println(c.String())
+				}
+			}
+		} else {
+			name := ""
+			if *flagShowBranch {
+				name = branchName + " " + fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), selected.Row+1, selected.Col+1, selected.Num+1)
+			}
+			count += ctx.recurseEval(s2, t2, name)
+		}
+		ReleaseSituation(s2)
+		ReleaseTrigger(t2)
+		if len(t.Conflicts) > 0 || count > 0 && *flagStopAtFirstSolution {
+			break
+		}
+	}
+	ReleaseBranchChoices(candidates)
+
 	if *flagShowBranch {
 		txt := "无解"
 		if count > 0 {
@@ -112,11 +107,11 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 		if !ok {
 			break
 		}
-		cellNumExcludes := s.numExcludes[rcn.Row][rcn.Col]
-		rowExcludes := s.rowExcludes[rcn.Num][rcn.Row]
-		colExcludes := s.colExcludes[rcn.Num][rcn.Col]
+		cellNumExcludes := countTrueBits(s.numExcludeBits[rcn.Row][rcn.Col])
+		rowExcludes := countTrueBits(s.rowExcludeBits[rcn.Num][rcn.Row])
+		colExcludes := countTrueBits(s.colExcludeBits[rcn.Num][rcn.Col])
 		b, _ := rcbp(rcn.Row, rcn.Col)
-		blockExcludes := s.blockExcludes[rcn.Num][b]
+		blockExcludes := countTrueBits(s.blockExcludeBits[rcn.Num][b])
 		if s.Set(t, rcn) {
 			ctx.evalCount++
 			if *flagShowProcess {

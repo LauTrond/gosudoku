@@ -9,7 +9,6 @@ import (
 func TestBranch(t *testing.T) {
 	puzzle, err := os.ReadFile("puzzles/hard-02.txt")
 	check(err)
-	*flagComplexGen = 0
 	s, tgr := ParseSituation(string(puzzle))
 	logicalEval(s, tgr)
 	s.Show("初始", -1, -1)

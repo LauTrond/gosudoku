@@ -5,8 +5,93 @@ import (
 	"sync"
 )
 
+var (
+	loop9      [9]int
+	loop3skip  = [3][2]int{{1, 2}, {0, 2}, {0, 1}}
+	loop9skip3 = [3][6]int{
+		{3, 4, 5, 6, 7, 8},
+		{0, 1, 2, 6, 7, 8},
+		{0, 1, 2, 3, 4, 5},
+	}
+	loop9skip = [9][8]int{
+		{1, 2, 3, 4, 5, 6, 7, 8},
+		{0, 2, 3, 4, 5, 6, 7, 8},
+		{0, 1, 3, 4, 5, 6, 7, 8},
+		{0, 1, 2, 4, 5, 6, 7, 8},
+		{0, 1, 2, 3, 5, 6, 7, 8},
+		{0, 1, 2, 3, 4, 6, 7, 8},
+		{0, 1, 2, 3, 4, 5, 7, 8},
+		{0, 1, 2, 3, 4, 5, 6, 8},
+		{0, 1, 2, 3, 4, 5, 6, 7},
+	}
+	skip9mask [9]int16
+
+	//返回有多少位为1
+	countTrueBitsMap [1 << 9]int8
+
+	// 从低位开始，返回bits第一个为0的位
+	// xxxxxxxx1 -> -1
+	// xxxxxxxx0 -> 0
+	// xxxxxxx01 -> 1
+	// xxxx01111 -> 4
+	// 011111111 -> 8
+	pos0map [1 << 9]int8
+)
+
+func init() {
+	for i := range skip9mask {
+		skip9mask[i] = ((1 << 9) - 1) ^ (1 << i)
+	}
+	for i := range countTrueBitsMap {
+		for bit := range loop9 {
+			countTrueBitsMap[i] += int8((i >> bit) & 1)
+		}
+	}
+	for n := range loop9 {
+		for i := 0; i < 1<<(8-n); i++ {
+			pos0map[(1<<n)-1+(i<<(n+1))] = int8(n)
+		}
+	}
+	pos0map[511] = -1
+}
+
+func pos0(i int16) int {
+	return int(pos0map[i])
+}
+
+func countTrueBits(i int16) int8 {
+	return countTrueBitsMap[i]
+}
+
+func rcbp(r, c int) (b int, p int) {
+	return r/3*3 + c/3, r%3*3 + c%3
+}
+
+type RowCol struct {
+	Row, Col int
+}
+
+type RowColNum struct {
+	RowCol
+	Num int
+}
+
+func RCN(r, c, n int) RowColNum {
+	return RowColNum{
+		RowCol: RowCol{
+			Row: r,
+			Col: c,
+		},
+		Num: n,
+	}
+}
+
+func (rcn RowColNum) Extract() (r, c, n int) {
+	return rcn.Row, rcn.Col, rcn.Num
+}
+
 type Queue struct {
-	values []RowColNumExclude
+	values []RowColNum
 	bits   int
 	mask   int
 	head   int
@@ -23,13 +108,13 @@ func NewQueueCapacity(initCapacity int) *Queue {
 
 func NewQueueBits(bits int) *Queue {
 	return &Queue{
-		values: make([]RowColNumExclude, 1<<bits),
+		values: make([]RowColNum, 1<<bits),
 		bits:   bits,
 		mask:   (1 << bits) - 1,
 	}
 }
 
-func (q *Queue) Enqueue(item RowColNumExclude) {
+func (q *Queue) Enqueue(item RowColNum) {
 	next := (q.tail + 1) & q.mask
 	if next == q.head {
 		newQueue := NewQueueBits(q.bits + 1)
@@ -72,7 +157,7 @@ func (q *Queue) CopyFrom(x *Queue) {
 	q.copyFrom(x)
 }
 
-func (q *Queue) Dequeue() (item RowColNumExclude, ok bool) {
+func (q *Queue) Dequeue() (item RowColNum, ok bool) {
 	if q.head == q.tail {
 		return
 	}
@@ -86,84 +171,6 @@ func (q *Queue) DiscardAll() {
 	q.head = q.tail
 }
 
-type RowCol struct {
-	Row, Col int
-}
-
-type RowColNum struct {
-	RowCol
-	Num int
-}
-
-func RCN(r, c, n int) RowColNum {
-	return RowColNum{
-		RowCol: RowCol{
-			Row: r,
-			Col: c,
-		},
-		Num: n,
-	}
-}
-
-func (rcn RowColNum) Extract() (r, c, n int) {
-	return rcn.Row, rcn.Col, rcn.Num
-}
-
-type RowColNumExclude struct {
-	RowColNum
-	CheckFlag int
-}
-
-func RCNE(r, c, n, e int) RowColNumExclude {
-	return RowColNumExclude{
-		RowColNum: RowColNum{
-			RowCol: RowCol{
-				Row: r,
-				Col: c,
-			},
-			Num: n,
-		},
-		CheckFlag: e,
-	}
-}
-
-func (rcne RowColNumExclude) RowToColCheck() bool {
-	return rcne.CheckFlag&NoRowToColCheck == 0
-}
-func (rcne RowColNumExclude) RowToBlockCheck() bool {
-	return rcne.CheckFlag&NoRowToBlockCheck == 0
-}
-func (rcne RowColNumExclude) RowToNumCheck() bool {
-	return rcne.CheckFlag&NoRowToNumCheck == 0
-}
-func (rcne RowColNumExclude) ColToRowCheck() bool {
-	return rcne.CheckFlag&NoColToRowCheck == 0
-}
-func (rcne RowColNumExclude) ColToBlockCheck() bool {
-	return rcne.CheckFlag&NoColToBlockCheck == 0
-}
-func (rcne RowColNumExclude) ColToNumCheck() bool {
-	return rcne.CheckFlag&NoColToNumCheck == 0
-}
-func (rcne RowColNumExclude) BlockToRowCheck() bool {
-	return rcne.CheckFlag&NoBlockToRowCheck == 0
-}
-func (rcne RowColNumExclude) BlockToColCheck() bool {
-	return rcne.CheckFlag&NoBlockToColCheck == 0
-}
-func (rcne RowColNumExclude) BlockToNumCheck() bool {
-	return rcne.CheckFlag&NoBlockToNumCheck == 0
-}
-func (rcne RowColNumExclude) NumToRowCheck() bool {
-	return rcne.CheckFlag&NoNumToRowCheck == 0
-}
-func (rcne RowColNumExclude) NumToColCheck() bool {
-	return rcne.CheckFlag&NoNumToColCheck == 0
-}
-func (rcne RowColNumExclude) NumToBlockCheck() bool {
-	return rcne.CheckFlag&NoNumToBlockCheck == 0
-}
-
 func add(p *int8, n int8) int8 {
 	*p += n
 	return *p
@@ -172,6 +179,11 @@ func add(p *int8, n int8) int8 {
 func setBit(p *int16, bitOffset int) int16 {
 	*p |= 1 << bitOffset
 	return *p
+}
+
+func bitwiseOr(p *int16, mask int16) (result int16, countBit int8) {
+	*p |= mask
+	return *p, countTrueBits(*p)
 }
 
 type BranchChoices struct {
@@ -208,4 +220,31 @@ func NewBranchChoices() *BranchChoices {
 
 func ReleaseBranchChoices(c *BranchChoices) {
 	branchChoicesPool.Put(c)
+}
+
+const (
+	ConflictCell  = 1
+	ConflictRow   = 2
+	ConflictCol   = 3
+	ConflictBlock = 4
+)
+
+type Conflict struct {
+	ConflictType int
+	RowColNum
+}
+
+func (c Conflict) String() string {
+	switch c.ConflictType {
+	case ConflictCell:
+		return fmt.Sprintf("单元格 (%d,%d) 没有可以填的数字", c.Row+1, c.Col+1)
+	case ConflictRow:
+		return fmt.Sprintf("行 %d 没有单元格可以填 %d", c.Row+1, c.Num+1)
+	case ConflictCol:
+		return fmt.Sprintf("列 %d 没有单元格可以填 %d", c.Col+1, c.Num+1)
+	case ConflictBlock:
+		return fmt.Sprintf("宫 (%d,%d) 没有单元格可以填 %d", c.Row/3+1, c.Col/3+1, c.Num+1)
+	default:
+		return ""
+	}
 }

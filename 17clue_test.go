@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 //这是一个比赛：
@@ -53,6 +54,7 @@ func Test17ClueContest(t *testing.T) {
 	check(err)
 	defer output.Close()
 
+	startTime := time.Now()
 	outputChannels := make(chan chan []byte, 1024)
 	go func() {
 		for i := 0; i < total; i++ {
@@ -102,4 +104,5 @@ func Test17ClueContest(t *testing.T) {
 		_, err = output.Write(<-c)
 		check(err)
 	}
+	fmt.Println("time:", time.Since(startTime))
 }
