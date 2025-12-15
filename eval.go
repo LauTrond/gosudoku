@@ -115,11 +115,11 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 		if !ok {
 			break
 		}
-		cellNumExcludes := countTrueBits(s.numExcludeBits[rcn.Row][rcn.Col])
-		rowExcludes := countTrueBits(s.rowExcludeBits[rcn.Num][rcn.Row])
-		colExcludes := countTrueBits(s.colExcludeBits[rcn.Num][rcn.Col])
+		cellNumExcludes := countTrueBits(s.numExcludeMask[rcn.Row][rcn.Col])
+		rowExcludes := countTrueBits(s.rowExcludeMask[rcn.Num][rcn.Row])
+		colExcludes := countTrueBits(s.colExcludeMask[rcn.Num][rcn.Col])
 		b, _ := rcbp(rcn.Row, rcn.Col)
-		blockExcludes := countTrueBits(s.blockExcludeBits[rcn.Num][b])
+		blockExcludes := countTrueBits(s.blockExcludeMask[rcn.Num][b])
 		if s.Set(t, rcn) {
 			ctx.evalCount++
 			if ctx.ShowProcess {

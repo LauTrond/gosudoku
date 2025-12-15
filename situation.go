@@ -31,17 +31,17 @@ type Situation struct {
 	//cellExclude[n][r][c] = 1 ： 单元格(r,c)排除 n
 	cellExclude [9][9][9]int8
 
-	//numExcludeBits[r][c] 的每一位代表该单元格(r,c)排除了哪些数字
-	numExcludeBits [9][9]int16
+	//numExcludeMask[r][c] 的每一位代表该单元格(r,c)排除了哪些数字
+	numExcludeMask [9][9]int16
 
-	//rowExcludeBits[n][r] 的每一位代表 r 行排除了哪些单元格
-	rowExcludeBits [9][9]int16
+	//rowExcludeMask[n][r] 的每一位代表 r 行排除了哪些单元格
+	rowExcludeMask [9][9]int16
 
-	//colExcludeBits[n][c] 的每一位代表 c 列排除了哪些单元格
-	colExcludeBits [9][9]int16
+	//colExcludeMask[n][c] 的每一位代表 c 列排除了哪些单元格
+	colExcludeMask [9][9]int16
 
-	//blockExcludeBits[n][b] 的每一位代表 宫 b 排除了哪些单元格
-	blockExcludeBits [9][9]int16
+	//blockExcludeMask[n][b] 的每一位代表 宫 b 排除了哪些单元格
+	blockExcludeMask [9][9]int16
 
 	//分支代数，每执行一次Copy就加1
 	branchGeneration int
@@ -132,16 +132,17 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	s.cells[r][c] = int8(n)
 
 	var (
-		b, p   = rcbp(r, c)
-		R, C   = r / 3, c / 3
-		rr, cc = r % 3, c % 3
-
-		nb int16 = 1 << n
-		rb int16 = 1 << r
-		cb int16 = 1 << c
-		Rb int16 = 7 << (R * 3)
-		Cb int16 = 7 << (C * 3)
-		pb int16 = 1 << p
+		R, C         = r / 3, c / 3
+		rr, cc       = r % 3, c % 3
+		b, p         = R*3 + C, rr*3 + cc
+		nm     int16 = 1 << n
+		rm     int16 = 1 << r
+		cm     int16 = 1 << c
+		pm     int16 = 1 << p
+		Rm     int16 = 07 << (R * 3)
+		Cm     int16 = 07 << (C * 3)
+		ccm    int16 = 0111 << cc
+		rrm    int16 = 07 << (rr * 3)
 	)
 
 	s.setCount++
@@ -150,140 +151,123 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	s.colSetCount[c]++
 	s.blockSetCount[b]++
 
-	if s.numExcludeBits[r][c] != skip9mask[n] {
-		s.numExcludeBits[r][c] = skip9mask[n]
+	if s.numExcludeMask[r][c] != skip9mask[n] {
+		s.numExcludeMask[r][c] = skip9mask[n]
 		for _, n0 := range loop9skip[n] {
 			if s.cellExclude[n0][r][c] == 1 {
 				continue
 			}
 			s.cellExclude[n0][r][c] = 1
-
-			if bits, cnt := bitwiseOr(&s.rowExcludeBits[n0][r], cb); cnt == 8 {
-				c0 := pos0(bits)
-				s.Confirm(t, RCN(r, c0, n0))
-			} else if cnt == 9 {
-				t.Conflict(ConflictRow, r, -1, n0)
-			}
-
-			if bits, cnt := bitwiseOr(&s.colExcludeBits[n0][c], rb); cnt == 8 {
-				r0 := pos0(bits)
-				s.Confirm(t, RCN(r0, c, n0))
-			} else if cnt == 9 {
-				t.Conflict(ConflictCol, -1, c, n0)
-			}
-
-			if bits, cnt := bitwiseOr(&s.blockExcludeBits[n0][b], pb); cnt == 8 {
-				r0, c0 := rcbp(b, pos0(bits))
-				s.Confirm(t, RCN(r0, c0, n0))
-			} else if cnt == 9 {
-				t.Conflict(ConflictBlock, r, c, n0)
-			}
+			s.applyRowMask(t, n0, r, cm)
+			s.applyColMask(t, n0, c, rm)
+			s.applyBlockMask(t, n0, b, pm)
 		}
 	}
-	if s.colExcludeBits[n][c] != skip9mask[r] {
-		s.colExcludeBits[n][c] = skip9mask[r]
+	if s.colExcludeMask[n][c] != skip9mask[r] {
+		s.colExcludeMask[n][c] = skip9mask[r]
 		for _, r0 := range loop9skip3[R] {
 			if s.cellExclude[n][r0][c] == 1 {
 				continue
 			}
 			s.cellExclude[n][r0][c] = 1
-
-			if bits, cnt := bitwiseOr(&s.numExcludeBits[r0][c], nb); cnt == 8 {
-				n0 := pos0(bits)
-				s.Confirm(t, RCN(r0, c, n0))
-			} else if cnt == 9 {
-				t.Conflict(ConflictCell, r0, c, -1)
-			}
-
-			if bits, cnt := bitwiseOr(&s.rowExcludeBits[n][r0], cb); cnt == 8 {
-				c0 := pos0(bits)
-				s.Confirm(t, RCN(r0, c0, n))
-			} else if cnt == 9 {
-				t.Conflict(ConflictRow, r0, -1, n)
-			}
+			s.applyNumMask(t, r0, c, nm)
+			s.applyRowMask(t, n, r0, cm)
 		}
 		for _, R0 := range loop3skip[R] {
-			if bits, cnt := bitwiseOr(&s.blockExcludeBits[n][R0*3+C], 0111<<cc); cnt == 8 {
-				r0, c0 := rcbp(R0*3+C, pos0(bits))
-				s.Confirm(t, RCN(r0, c0, n))
-			} else if cnt == 9 {
-				t.Conflict(ConflictBlock, R0*3, C*3, n)
-			}
+			s.applyBlockMask(t, n, R0*3+C, ccm)
 		}
 	}
-	if s.rowExcludeBits[n][r] != skip9mask[c] {
-		s.rowExcludeBits[n][r] = skip9mask[c]
+	if s.rowExcludeMask[n][r] != skip9mask[c] {
+		s.rowExcludeMask[n][r] = skip9mask[c]
 		for _, c0 := range loop9skip3[C] {
 			if s.cellExclude[n][r][c0] == 1 {
 				continue
 			}
 			s.cellExclude[n][r][c0] = 1
-
-			if bits, cnt := bitwiseOr(&s.numExcludeBits[r][c0], nb); cnt == 8 {
-				n0 := pos0(bits)
-				s.Confirm(t, RCN(r, c0, n0))
-			} else if cnt == 9 {
-				t.Conflict(ConflictCell, r, c0, -1)
-			}
-
-			if bits, cnt := bitwiseOr(&s.colExcludeBits[n][c0], rb); cnt == 8 {
-				r0 := pos0(bits)
-				s.Confirm(t, RCN(r0, c0, n))
-			} else if cnt == 9 {
-				t.Conflict(ConflictCol, -1, c0, n)
-			}
+			s.applyNumMask(t, r, c0, nm)
+			s.applyColMask(t, n, c0, rm)
 		}
 		for _, C0 := range loop3skip[C] {
-			if bits, cnt := bitwiseOr(&s.blockExcludeBits[n][R*3+C0], 7<<(rr*3)); cnt == 8 {
-				r0, c0 := rcbp(R*3+C0, pos0(bits))
-				s.Confirm(t, RCN(r0, c0, n))
-			} else if cnt == 9 {
-				t.Conflict(ConflictBlock, R*3, C0*3, n)
-			}
+			s.applyBlockMask(t, n, R*3+C0, rrm)
 		}
 	}
-	if s.blockExcludeBits[n][b] != skip9mask[p] {
-		s.blockExcludeBits[n][b] = skip9mask[p]
+	if s.blockExcludeMask[n][b] != skip9mask[p] {
+		s.blockExcludeMask[n][b] = skip9mask[p]
 		for _, p0 := range loop9skip[p] {
 			r0, c0 := rcbp(b, p0)
 			if s.cellExclude[n][r0][c0] == 1 {
 				continue
 			}
 			s.cellExclude[n][r0][c0] = 1
-
-			if bits, cnt := bitwiseOr(&s.numExcludeBits[r0][c0], nb); cnt == 8 {
-				n0 := pos0(bits)
-				s.Confirm(t, RCN(r0, c0, n0))
-			} else if cnt == 9 {
-				t.Conflict(ConflictCell, r0, c0, -1)
-			}
+			s.applyNumMask(t, r0, c0, nm)
 		}
 		for _, rr0 := range loop3skip[rr] {
 			r0 := R*3 + rr0
-
-			if bits, cnt := bitwiseOr(&s.rowExcludeBits[n][r0], Cb); cnt == 8 {
-				c0 := pos0(bits)
-				s.Confirm(t, RCN(r0, c0, n))
-			} else if cnt == 9 {
-				t.Conflict(ConflictRow, r0, -1, n)
-			}
+			s.applyRowMask(t, n, r0, Cm)
 		}
 		for _, cc0 := range loop3skip[cc] {
 			c0 := C*3 + cc0
-
-			if bits, cnt := bitwiseOr(&s.colExcludeBits[n][c0], Rb); cnt == 8 {
-				r0 := pos0(bits)
-				s.Confirm(t, RCN(r0, c0, n))
-			} else if cnt == 9 {
-				t.Conflict(ConflictCol, -1, c0, n)
-			}
+			s.applyColMask(t, n, c0, Rm)
 		}
 	}
 
 	return true
 }
 
-func (s *Situation) Confirm(t *Trigger, rcn RowColNum) {
+func (s *Situation) applyNumMask(t *Trigger, r, c int, mask int16) {
+	n0 := pos0(bitwiseOr(&s.numExcludeMask[r][c], mask))
+	rcn := RCN(r, c, n0)
+	switch n0 {
+	case -2:
+		return
+	case -1:
+		t.Conflict(ConflictCell, rcn)
+	default:
+		s.confirm(t, rcn)
+	}
+}
+
+func (s *Situation) applyRowMask(t *Trigger, n, r int, mask int16) {
+	c0 := pos0(bitwiseOr(&s.rowExcludeMask[n][r], mask))
+	rcn := RCN(r, c0, n)
+	switch c0 {
+	case -2:
+		return
+	case -1:
+		t.Conflict(ConflictRow, rcn)
+	default:
+		s.confirm(t, rcn)
+	}
+}
+
+func (s *Situation) applyColMask(t *Trigger, n, c int, mask int16) {
+	r0 := pos0(bitwiseOr(&s.colExcludeMask[n][c], mask))
+	rcn := RCN(r0, c, n)
+	switch r0 {
+	case -2:
+		return
+	case -1:
+		t.Conflict(ConflictCol, rcn)
+	default:
+		s.confirm(t, rcn)
+	}
+}
+
+func (s *Situation) applyBlockMask(t *Trigger, n, b int, mask int16) {
+	p0 := pos0(bitwiseOr(&s.blockExcludeMask[n][b], mask))
+	r0, c0 := rcbp(b, p0)
+	rcn := RCN(r0, c0, n)
+	switch p0 {
+	case -2:
+		return
+	case -1:
+		t.Conflict(ConflictBlock, rcn)
+	default:
+		s.confirm(t, rcn)
+	}
+}
+
+func (s *Situation) confirm(t *Trigger, rcn RowColNum) {
 	if s.cells[rcn.Row][rcn.Col] != -1 {
 		return
 	}
@@ -331,7 +315,7 @@ func (s *Situation) ChooseBranchCell1Nums(nums int) *BranchChoices {
 		}
 		return s.RowColHash(candidate.RowCol) < s.RowColHash(selected.RowCol)
 	}
-	for r, rowBits := range s.numExcludeBits {
+	for r, rowBits := range s.numExcludeMask {
 		for c, cellBits := range rowBits {
 			cellNumExcludes := countTrueBits(cellBits)
 			if cellNumExcludes != expectingExcludes {
@@ -355,7 +339,7 @@ func (s *Situation) ChooseBranchCell1Nums(nums int) *BranchChoices {
 		return nil
 	}
 	r, c := selected.Row, selected.Col
-	numExcludeBits := s.numExcludeBits[r][c]
+	numExcludeBits := s.numExcludeMask[r][c]
 	var tmpArray [9]int
 	candidateNums := tmpArray[:0]
 	for n := range loop9 {
@@ -469,10 +453,10 @@ func (t *Trigger) GetConfirm() (RowColNum, bool) {
 	return t.confirms.Dequeue()
 }
 
-func (t *Trigger) Conflict(conflictType, r, c, n int) {
+func (t *Trigger) Conflict(conflictType int, rcn RowColNum) {
 	t.Conflicts = append(t.Conflicts, Conflict{
 		ConflictType: conflictType,
-		RowColNum:    RCN(r, c, n),
+		RowColNum:    rcn,
 	})
 }
 

@@ -47,14 +47,24 @@ func init() {
 			countTrueBitsMap[i] += int8((i >> bit) & 1)
 		}
 	}
-	for n := range loop9 {
-		for i := 0; i < 1<<(8-n); i++ {
-			pos0map[(1<<n)-1+(i<<(n+1))] = int8(n)
-		}
+	for i := range pos0map {
+		pos0map[i] = -2
+	}
+	for i := range loop9 {
+		pos0map[skip9mask[i]] = int8(i)
 	}
 	pos0map[511] = -1
 }
 
+// 从低位开始，返回bits第一个为0的位
+// 如果0不存在，返回-1
+// 如果多于一个0，返回-2
+// 101010101 -> -2
+// 111111111 -> -1
+// 111111110 -> 0
+// 111111101 -> 1
+// 111101111 -> 4
+// 011111111 -> 8
 func pos0(i int16) int {
 	return int(pos0map[i])
 }
@@ -171,19 +181,9 @@ func (q *Queue) DiscardAll() {
 	q.head = q.tail
 }
 
-func add(p *int8, n int8) int8 {
-	*p += n
-	return *p
-}
-
-func setBit(p *int16, bitOffset int) int16 {
-	*p |= 1 << bitOffset
-	return *p
-}
-
-func bitwiseOr(p *int16, mask int16) (result int16, countBit int8) {
+func bitwiseOr(p *int16, mask int16) int16 {
 	*p |= mask
-	return *p, countTrueBits(*p)
+	return *p
 }
 
 type BranchChoices struct {
