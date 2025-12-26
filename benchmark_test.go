@@ -67,6 +67,7 @@ func TestHardest1106_MT(t *testing.T) {
 
 type BenchmarkConfig struct {
 	Parallel        int
+	GensApplyRules  int
 	InputFile       string
 	OutputFile      string
 	OverwriteOutput bool
@@ -121,10 +122,11 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 
 	var mtx sync.Mutex
 	puzzlesCount := 0
-	var branchCount [9]int
+	var branchCount [10]int
 	sumBranch := 0
 	evalCount := 0
 	succCount := 0
+	rulesDebranch := 0
 
 	startTime := time.Now()
 	printNamedValue("测试集", "%s", cfg.InputFile)
@@ -155,6 +157,7 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 		defer ReleaseSituation(s)
 		defer ReleaseTrigger(trg)
 		ctx := NewSudokuContext()
+		ctx.GensApplyRules = cfg.GensApplyRules
 		ctx.Run(s, trg)
 
 		var solutionLine []byte
@@ -182,6 +185,7 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 			sumBranch += numBranches
 		}
 		evalCount += ctx.evalCount
+		rulesDebranch += ctx.rulesDebranch
 		mtx.Unlock()
 
 		return solutionLine
@@ -236,7 +240,7 @@ func (cfg *BenchmarkConfig) Run(t *testing.T) {
 	printNamedValue("解题速率(局/s)", "%.2f", float64(puzzlesCount)/dur.Seconds())
 	printNamedValue("总分支数", "%d", sumBranch)
 	printNamedValue("多叉分支数", "%d", sumBranch-branchCount[2])
-	printNamedValue("分支率(次/局)", "%.2f", float64(sumBranch)/float64(puzzlesCount))
+	printNamedValue("规则排除分支数", "%d", rulesDebranch)
 	printNamedValue("总演算次数", "%d", evalCount)
 }
 

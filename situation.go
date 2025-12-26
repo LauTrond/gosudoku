@@ -60,7 +60,7 @@ func ParseSituation(puzzle string) (*Situation, *Trigger) {
 		}
 		for c, n := range line {
 			if n >= '1' && n <= '9' {
-				s.Set(t, RCN(r, c, int(n-'1')))
+				s.Set(t, RCN(int8(r), int8(c), int8(n-'1')))
 			}
 		}
 	}
@@ -77,7 +77,7 @@ func ParseSituationFromLine(line []byte) (*Situation, *Trigger) {
 	t := NewTrigger()
 	for i, n := range line {
 		if n >= '1' && n <= '9' {
-			s.Set(t, RCN(i/9, i%9, int(n-'1')))
+			s.Set(t, RCN(int8(i/9), int8(i%9), int8(n-'1')))
 		}
 	}
 	return s, t
@@ -129,7 +129,7 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	if s.cells[r][c] != -1 {
 		return false
 	}
-	s.cells[r][c] = int8(n)
+	s.cells[r][c] = n
 
 	var (
 		R, C         = r / 3, c / 3
@@ -151,120 +151,292 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) bool {
 	s.colSetCount[c]++
 	s.blockSetCount[b]++
 
-	if s.numExcludeMask[r][c] != skip9mask[n] {
-		s.numExcludeMask[r][c] = skip9mask[n]
+	if !setInt16(&s.numExcludeMask[r][c], skip9mask[n]) {
 		for _, n0 := range loop9skip[n] {
-			if s.cellExclude[n0][r][c] == 1 {
+			if setInt8(&s.cellExclude[n0][r][c], 1) {
 				continue
 			}
-			s.cellExclude[n0][r][c] = 1
-			s.applyRowMask(t, n0, r, cm)
-			s.applyColMask(t, n0, c, rm)
-			s.applyBlockMask(t, n0, b, pm)
-		}
-	}
-	if s.colExcludeMask[n][c] != skip9mask[r] {
-		s.colExcludeMask[n][c] = skip9mask[r]
-		for _, r0 := range loop9skip3[R] {
-			if s.cellExclude[n][r0][c] == 1 {
-				continue
+			if rcn, confirm := s.applyRowMask(n0, r, cm); confirm {
+				s.confirmRow(t, rcn)
 			}
-			s.cellExclude[n][r0][c] = 1
-			s.applyNumMask(t, r0, c, nm)
-			s.applyRowMask(t, n, r0, cm)
-		}
-		for _, R0 := range loop3skip[R] {
-			s.applyBlockMask(t, n, R0*3+C, ccm)
+			if rcn, confirm := s.applyColMask(n0, c, rm); confirm {
+				s.confirmCol(t, rcn)
+			}
+			if bpn, confirm := s.applyBlockMask(n0, b, pm); confirm {
+				s.confirmBlock(t, bpn)
+			}
 		}
 	}
-	if s.rowExcludeMask[n][r] != skip9mask[c] {
-		s.rowExcludeMask[n][r] = skip9mask[c]
+	if !setInt16(&s.rowExcludeMask[n][r], skip9mask[c]) {
 		for _, c0 := range loop9skip3[C] {
-			if s.cellExclude[n][r][c0] == 1 {
+			if setInt8(&s.cellExclude[n][r][c0], 1) {
 				continue
 			}
-			s.cellExclude[n][r][c0] = 1
-			s.applyNumMask(t, r, c0, nm)
-			s.applyColMask(t, n, c0, rm)
+			if rcn, confirm := s.applyNumMask(r, c0, nm); confirm {
+				s.confirmNum(t, rcn)
+			}
+			if rcn, confirm := s.applyColMask(n, c0, rm); confirm {
+				s.confirmCol(t, rcn)
+			}
 		}
 		for _, C0 := range loop3skip[C] {
-			s.applyBlockMask(t, n, R*3+C0, rrm)
+			if bpn, confirm := s.applyBlockMask(n, R*3+C0, rrm); confirm {
+				s.confirmBlock(t, bpn)
+			}
 		}
 	}
-	if s.blockExcludeMask[n][b] != skip9mask[p] {
-		s.blockExcludeMask[n][b] = skip9mask[p]
-		for _, p0 := range loop9skip[p] {
-			r0, c0 := rcbp(b, p0)
-			if s.cellExclude[n][r0][c0] == 1 {
+	if !setInt16(&s.colExcludeMask[n][c], skip9mask[r]) {
+		for _, r0 := range loop9skip3[R] {
+			if setInt8(&s.cellExclude[n][r0][c], 1) {
 				continue
 			}
-			s.cellExclude[n][r0][c0] = 1
-			s.applyNumMask(t, r0, c0, nm)
+			if rcn, confirm := s.applyNumMask(r0, c, nm); confirm {
+				s.confirmNum(t, rcn)
+			}
+			if rcn, confirm := s.applyRowMask(n, r0, cm); confirm {
+				s.confirmRow(t, rcn)
+			}
+		}
+		for _, R0 := range loop3skip[R] {
+			if bpn, confirm := s.applyBlockMask(n, R0*3+C, ccm); confirm {
+				s.confirmBlock(t, bpn)
+			}
+		}
+	}
+	if !setInt16(&s.blockExcludeMask[n][b], skip9mask[p]) {
+		for _, p0 := range loop9skip[p] {
+			r0, c0 := rcbp(b, p0)
+			if setInt8(&s.cellExclude[n][r0][c0], 1) {
+				continue
+			}
+			if rcn, confirm := s.applyNumMask(r0, c0, nm); confirm {
+				s.confirmNum(t, rcn)
+			}
 		}
 		for _, rr0 := range loop3skip[rr] {
 			r0 := R*3 + rr0
-			s.applyRowMask(t, n, r0, Cm)
+			if rcn, confirm := s.applyRowMask(n, r0, Cm); confirm {
+				s.confirmRow(t, rcn)
+			}
 		}
 		for _, cc0 := range loop3skip[cc] {
 			c0 := C*3 + cc0
-			s.applyColMask(t, n, c0, Rm)
+			if rcn, confirm := s.applyColMask(n, c0, Rm); confirm {
+				s.confirmCol(t, rcn)
+			}
 		}
 	}
 
 	return true
 }
 
-func (s *Situation) applyNumMask(t *Trigger, r, c int, mask int16) {
+func (s *Situation) applyNumMask(r, c int8, mask int16) (RowColNum, bool) {
 	n0 := pos0(bitwiseOr(&s.numExcludeMask[r][c], mask))
-	rcn := RCN(r, c, n0)
-	switch n0 {
-	case -2:
-		return
-	case -1:
+	return RCN(r, c, n0), n0 != -2
+}
+
+func (s *Situation) confirmNum(t *Trigger, rcn RowColNum) {
+	if rcn.Num >= 0 {
+		s.confirm(t, rcn)
+	} else {
 		t.Conflict(ConflictCell, rcn)
-	default:
-		s.confirm(t, rcn)
 	}
 }
 
-func (s *Situation) applyRowMask(t *Trigger, n, r int, mask int16) {
+func (s *Situation) applyRowMask(n, r int8, mask int16) (RowColNum, bool) {
 	c0 := pos0(bitwiseOr(&s.rowExcludeMask[n][r], mask))
-	rcn := RCN(r, c0, n)
-	switch c0 {
-	case -2:
-		return
-	case -1:
+	return RCN(r, c0, n), c0 != -2
+}
+
+func (s *Situation) confirmRow(t *Trigger, rcn RowColNum) {
+	if rcn.Col >= 0 {
+		s.confirm(t, rcn)
+	} else {
 		t.Conflict(ConflictRow, rcn)
-	default:
-		s.confirm(t, rcn)
 	}
 }
 
-func (s *Situation) applyColMask(t *Trigger, n, c int, mask int16) {
+func (s *Situation) applyColMask(n, c int8, mask int16) (RowColNum, bool) {
 	r0 := pos0(bitwiseOr(&s.colExcludeMask[n][c], mask))
-	rcn := RCN(r0, c, n)
-	switch r0 {
-	case -2:
-		return
-	case -1:
-		t.Conflict(ConflictCol, rcn)
-	default:
+	return RCN(r0, c, n), r0 != -2
+}
+
+func (s *Situation) confirmCol(t *Trigger, rcn RowColNum) {
+	if rcn.Row >= 0 {
 		s.confirm(t, rcn)
+	} else {
+		t.Conflict(ConflictCol, rcn)
 	}
 }
 
-func (s *Situation) applyBlockMask(t *Trigger, n, b int, mask int16) {
+func (s *Situation) applyBlockMask(n, b int8, mask int16) (BlockPosNum, bool) {
 	p0 := pos0(bitwiseOr(&s.blockExcludeMask[n][b], mask))
-	r0, c0 := rcbp(b, p0)
-	rcn := RCN(r0, c0, n)
-	switch p0 {
-	case -2:
-		return
-	case -1:
-		t.Conflict(ConflictBlock, rcn)
-	default:
-		s.confirm(t, rcn)
+	return BPN(b, p0, n), p0 != -2
+}
+
+func (s *Situation) confirmBlock(t *Trigger, bpn BlockPosNum) {
+	if bpn.Pos >= 0 {
+		s.confirm(t, bpn.RCN())
+	} else {
+		bpn.Pos = 0
+		t.Conflict(ConflictBlock, bpn.RCN())
 	}
+}
+
+func (s *Situation) ApplyExcludeRules(t *Trigger) (changed int) {
+	changed += s.applyDimVariantRule(t, s.getMaskNumRow, s.getMaskNumCol, NRC)
+	changed += s.applyDimVariantRule(t, s.getMaskNumCol, s.getMaskNumRow, NCR)
+	changed += s.applyDimVariantRule(t, s.getMaskRowCol, s.getMaskRowNum, RCN)
+	changed += s.applyDimVariantRule(t, s.getMaskRowNum, s.getMaskRowCol, RNC)
+	changed += s.applyDimVariantRule(t, s.getMaskColNum, s.getMaskColRow, CNR)
+	changed += s.applyDimVariantRule(t, s.getMaskColRow, s.getMaskColNum, CRN)
+	changed += s.applyDimVariantRule(t, s.getMaskBlockNum, s.getMaskBlockPos, BNPtoRCN)
+	changed += s.applyDimVariantRule(t, s.getMaskBlockPos, s.getMaskBlockNum, BPNtoRCN)
+	changed += s.applyBlockRules(t)
+	return
+}
+
+func (s *Situation) getMaskNumRow(n, r int8) *int16 {
+	return &s.rowExcludeMask[n][r]
+}
+
+func (s *Situation) getMaskRowNum(r, n int8) *int16 {
+	return &s.rowExcludeMask[n][r]
+}
+
+func (s *Situation) getMaskNumCol(n, c int8) *int16 {
+	return &s.colExcludeMask[n][c]
+}
+
+func (s *Situation) getMaskColNum(c, n int8) *int16 {
+	return &s.colExcludeMask[n][c]
+}
+
+func (s *Situation) getMaskRowCol(r, c int8) *int16 {
+	return &s.numExcludeMask[r][c]
+}
+
+func (s *Situation) getMaskColRow(c, r int8) *int16 {
+	return &s.numExcludeMask[r][c]
+}
+
+func (s *Situation) getMaskBlockNum(b, n int8) *int16 {
+	return &s.blockExcludeMask[n][b]
+}
+
+func (s *Situation) getMaskBlockPos(b, p int8) *int16 {
+	r, c := rcbp(b, p)
+	return &s.numExcludeMask[r][c]
+}
+
+type getMaskFunc func(x, y int8) *int16
+type getRowColNumFunc func(x, y, z int8) RowColNum
+
+func (s *Situation) applyDimVariantRule(t *Trigger, getMaskDim1Dim2, getMaskDim1Dim3 getMaskFunc, getRCN getRowColNumFunc) (changed int) {
+	for _dim1 := range loop9 {
+		dim1 := int8(_dim1)
+		var checkMap [1 << 9]int8
+		for _dim2 := range loop9 {
+			dim2b := int8(_dim2)
+			dim3mask := *getMaskDim1Dim2(dim1, dim2b)
+			if countTrueBits(dim3mask) != 7 {
+				continue
+			}
+			if checkMap[dim3mask] == 0 {
+				checkMap[dim3mask] = dim2b + 1
+				continue
+			}
+			dim2a := checkMap[dim3mask] - 1
+
+			dim2skipMask := skip9mask[dim2a] & skip9mask[dim2b]
+			for _dim3 := range loop9 {
+				dim3 := int8(_dim3)
+				if dim3mask&(1<<dim3) > 0 {
+					continue
+				}
+				dim2mask := *getMaskDim1Dim3(dim1, dim3)
+				if dim2mask == dim2mask|dim2skipMask {
+					continue
+				}
+				for _dim2c := range loop9 {
+					dim2c := int8(_dim2c)
+					if dim2c == dim2a || dim2c == dim2b {
+						continue
+					}
+					changed += s.excludeOne(t, getRCN(dim1, dim2c, dim3))
+				}
+				if len(t.Conflicts) > 0 {
+					return
+				}
+			}
+		}
+
+	}
+	return
+}
+
+func (s *Situation) applyBlockRules(t *Trigger) (changed int) {
+	for _n := range loop9 {
+		n := int8(_n)
+		for _r := range loop9 {
+			r := int8(_r)
+			rr := r % 3
+			for _C := range loop3 {
+				C := int8(_C)
+				b := r/3*3 + C
+				if s.rowExcludeMask[n][r]&skip3mask[C] == skip3mask[C] && s.blockExcludeMask[n][b]&skip3mask[rr] != skip3mask[rr] {
+					for _, p := range loop9skip3[rr] {
+						changed += s.excludeOne(t, BPNtoRCN(b, p, n))
+					}
+				}
+				if s.blockExcludeMask[n][b]&skip3mask[rr] == skip3mask[rr] && s.rowExcludeMask[n][r]&skip3mask[C] != skip3mask[C] {
+					for _, c := range loop9skip3[C] {
+						changed += s.excludeOne(t, RCN(r, c, n))
+					}
+				}
+			}
+		}
+		for _c := range loop9 {
+			c := int8(_c)
+			cc := c % 3
+			for _R := range loop3 {
+				R := int8(_R)
+				b := c/3 + R*3
+				if s.colExcludeMask[n][c]&skip3mask[R] == skip3mask[R] && s.blockExcludeMask[n][b]&skip3maskCol[cc] != skip3maskCol[cc] {
+					for _, p := range loop9skip3col[cc] {
+						changed += s.excludeOne(t, BPNtoRCN(b, p, n))
+					}
+				}
+				if s.blockExcludeMask[n][b]&skip3maskCol[cc] == skip3maskCol[cc] && s.colExcludeMask[n][c]&skip3mask[R] != skip3mask[R] {
+					for _, r := range loop9skip3[R] {
+						changed += s.excludeOne(t, RCN(r, c, n))
+					}
+				}
+			}
+		}
+	}
+	return
+}
+
+func (s *Situation) excludeOne(t *Trigger, rcn RowColNum) int {
+	r, c, n := rcn.Extract()
+	if setInt8(&s.cellExclude[r][c][n], 1) {
+		return 0
+	}
+	if rcn0, confirm := s.applyNumMask(r, c, 1<<n); confirm {
+		s.confirmNum(t, rcn0)
+	}
+	if rcn0, confirm := s.applyRowMask(n, r, 1<<c); confirm {
+		s.confirmRow(t, rcn0)
+	}
+	if rcn0, confirm := s.applyColMask(n, c, 1<<r); confirm {
+		s.confirmCol(t, rcn0)
+	}
+	b, p := rcbp(r, c)
+	if bpn0, confirm := s.applyBlockMask(n, b, 1<<p); confirm {
+		s.confirmBlock(t, bpn0)
+	}
+	return 1
 }
 
 func (s *Situation) confirm(t *Trigger, rcn RowColNum) {
@@ -285,11 +457,11 @@ func (s *Situation) Show(title string, r, c int) {
 }
 
 func (s *Situation) RowColHash(rc RowCol) int {
-	return (rc.Row*317 + rc.Col*659 + s.setCount*531) % 997
+	return (int(rc.Row)*317 + int(rc.Col)*659 + s.setCount*531) % 997
 }
 
 func (s *Situation) ChooseBranchCell1() *BranchChoices {
-	for nums := 2; nums <= 9; nums++ {
+	for nums := int8(2); nums <= 9; nums++ {
 		result := s.ChooseBranchCell1Nums(nums)
 		if result.Size() > 0 {
 			return result
@@ -298,7 +470,7 @@ func (s *Situation) ChooseBranchCell1() *BranchChoices {
 	return nil
 }
 
-func (s *Situation) ChooseBranchCell1Nums(nums int) *BranchChoices {
+func (s *Situation) ChooseBranchCell1Nums(nums int8) *BranchChoices {
 	expectingExcludes := int8(9 - nums)
 	type Candidate struct {
 		RowCol
@@ -321,13 +493,13 @@ func (s *Situation) ChooseBranchCell1Nums(nums int) *BranchChoices {
 			if cellNumExcludes != expectingExcludes {
 				continue
 			}
-			b, _ := rcbp(r, c)
+			b, _ := rcbp(int8(r), int8(c))
 			setRow := int(s.rowSetCount[r])
 			setCol := int(s.colSetCount[c])
 			setBlock := int(s.blockSetCount[b])
 
 			candidate := Candidate{
-				RowCol: RowCol{r, c},
+				RowCol: RowCol{int8(r), int8(c)},
 				Score:  setRow + setCol + setBlock,
 			}
 			if isBetter(candidate) {
@@ -340,11 +512,11 @@ func (s *Situation) ChooseBranchCell1Nums(nums int) *BranchChoices {
 	}
 	r, c := selected.Row, selected.Col
 	numExcludeBits := s.numExcludeMask[r][c]
-	var tmpArray [9]int
+	var tmpArray [9]int8
 	candidateNums := tmpArray[:0]
 	for n := range loop9 {
 		if numExcludeBits&(1<<n) == 0 {
-			candidateNums = append(candidateNums, n)
+			candidateNums = append(candidateNums, int8(n))
 		}
 	}
 	if nums == 2 && s.CompareNumInCell(r, c, candidateNums[1], candidateNums[0]) {
@@ -359,7 +531,7 @@ func (s *Situation) ChooseBranchCell1Nums(nums int) *BranchChoices {
 }
 
 // 选择哪个号码开始猜测，返回true表示n1比较好
-func (s *Situation) CompareNumInCell(r, c, n1, n2 int) bool {
+func (s *Situation) CompareNumInCell(r, c, n1, n2 int8) bool {
 	//我也不知道为啥这个指标会有效，只是测试结果表明，这样蒙对的概率更高
 	score1 := int(s.numSetCount[n1])
 	score2 := int(s.numSetCount[n2])
@@ -367,8 +539,8 @@ func (s *Situation) CompareNumInCell(r, c, n1, n2 int) bool {
 		return score1 > score2
 	}
 
-	base := r*61 + c*67 + s.setCount*71
-	return (base*n1)%41 < (base*n2)%41
+	base := int(r)*61 + int(c)*67 + s.setCount*71
+	return base*int(n1)%41 < base*int(n2)%41
 }
 
 func ShowCells(cells *[9][9]int8, title string, r, c int) {

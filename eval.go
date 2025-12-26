@@ -9,10 +9,12 @@ type SudokuContext struct {
 	ShowProcess         bool
 	ShowBranch          bool
 	StopAtFirstSolution bool
+	GensApplyRules      int
 
-	evalCount   int
-	branchCount [9]int
-	solutions   []*[9][9]int8
+	evalCount     int
+	rulesDebranch int
+	branchCount   [10]int
+	solutions     []*[9][9]int8
 }
 
 func NewSudokuContext() *SudokuContext {
@@ -37,12 +39,17 @@ func (ctx *SudokuContext) Run(s *Situation, t *Trigger) int {
 
 // recurseEval 开始推断局势 s，并返回所有可能的终局。
 // 如果返回 0，表示这个局势有矛盾，不存在正确的解答。
-// t会被释放，不能再使用
 func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName string) int {
 	if ctx.ShowBranch {
 		fmt.Println(branchName, "开始")
 	}
-	if !ctx.logicalEval(s, t) {
+	var result bool
+	if s.branchGeneration < ctx.GensApplyRules {
+		result = ctx.logicalEvalWithRules(s, t)
+	} else {
+		result = ctx.logicalEval(s, t)
+	}
+	if !result {
 		if ctx.ShowBranch {
 			fmt.Println(branchName, fmt.Sprintf("演算到 <%d> 矛盾", s.Count()))
 		}
@@ -56,6 +63,7 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 		ctx.solutions = append(ctx.solutions, &cells)
 		return 1
 	}
+
 	//当前没有找到确定的填充选项，所以获取所有可能选项，然后在所有可能的选项里选一个单元格做尝试。
 
 	//选取一个单元格和Num进行尝试
@@ -151,6 +159,35 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 	}
 	if s.Completed() && ctx.ShowProcess {
 		fmt.Println("找到了一个解")
+	}
+	return true
+}
+
+// 如果返回false，表示这个局势有矛盾。
+func (ctx *SudokuContext) logicalEvalWithRules(s *Situation, t *Trigger) bool {
+	for t.confirms.Size() > 0 {
+		if !ctx.logicalEval(s, t) {
+			return false
+		}
+		if s.Completed() {
+			return true
+		}
+		changed := s.ApplyExcludeRules(t)
+		if ctx.ShowProcess || ctx.ShowBranch {
+			fmt.Printf("应用复杂排除规则，新增排除 %d 单元格\n", changed)
+		}
+		if len(t.Conflicts) > 0 || t.confirms.Size() > 0 {
+			ctx.rulesDebranch++
+		}
+		if len(t.Conflicts) > 0 {
+			if ctx.ShowProcess {
+				fmt.Println("发生矛盾：")
+				for _, msg := range t.Conflicts {
+					fmt.Println(msg)
+				}
+			}
+			return false
+		}
 	}
 	return true
 }

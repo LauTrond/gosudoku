@@ -6,14 +6,18 @@ import (
 )
 
 var (
-	loop9      [9]int
-	loop3skip  = [3][2]int{{1, 2}, {0, 2}, {0, 1}}
-	loop9skip3 = [3][6]int{
+	loop9      = [9]int8{}
+	loop9skip3 = [3][6]int8{
 		{3, 4, 5, 6, 7, 8},
 		{0, 1, 2, 6, 7, 8},
 		{0, 1, 2, 3, 4, 5},
 	}
-	loop9skip = [9][8]int{
+	loop9skip3col = [3][6]int8{
+		{1, 2, 4, 5, 7, 8},
+		{0, 2, 3, 5, 6, 8},
+		{0, 1, 3, 4, 6, 7},
+	}
+	loop9skip = [9][8]int8{
 		{1, 2, 3, 4, 5, 6, 7, 8},
 		{0, 2, 3, 4, 5, 6, 7, 8},
 		{0, 1, 3, 4, 5, 6, 7, 8},
@@ -24,7 +28,11 @@ var (
 		{0, 1, 2, 3, 4, 5, 6, 8},
 		{0, 1, 2, 3, 4, 5, 6, 7},
 	}
-	skip9mask [9]int16
+	loop3        = [3]int8{}
+	loop3skip    = [3][2]int8{{1, 2}, {0, 2}, {0, 1}}
+	skip9mask    = [9]int16{}
+	skip3mask    = [3]int16{0770, 0707, 077}
+	skip3maskCol = [3]int16{0666, 0555, 0333}
 
 	//返回有多少位为1
 	countTrueBitsMap [1 << 9]int8
@@ -56,7 +64,7 @@ func init() {
 	pos0map[511] = -1
 }
 
-// 从低位开始，返回bits第一个为0的位
+// 从低位开始，返回i唯一为0的位，最多支持9位
 // 如果0不存在，返回-1
 // 如果多于一个0，返回-2
 // 101010101 -> -2
@@ -65,28 +73,28 @@ func init() {
 // 111111101 -> 1
 // 111101111 -> 4
 // 011111111 -> 8
-func pos0(i int16) int {
-	return int(pos0map[i])
+func pos0(i int16) int8 {
+	return pos0map[i]
 }
 
 func countTrueBits(i int16) int8 {
 	return countTrueBitsMap[i]
 }
 
-func rcbp(r, c int) (b int, p int) {
+func rcbp(r, c int8) (b int8, p int8) {
 	return r/3*3 + c/3, r%3*3 + c%3
 }
 
 type RowCol struct {
-	Row, Col int
+	Row, Col int8
 }
 
 type RowColNum struct {
 	RowCol
-	Num int
+	Num int8
 }
 
-func RCN(r, c, n int) RowColNum {
+func RCN(r, c, n int8) RowColNum {
 	return RowColNum{
 		RowCol: RowCol{
 			Row: r,
@@ -96,8 +104,62 @@ func RCN(r, c, n int) RowColNum {
 	}
 }
 
-func (rcn RowColNum) Extract() (r, c, n int) {
+func NRC(n, r, c int8) RowColNum {
+	return RCN(r, c, n)
+}
+
+func NCR(n, c, r int8) RowColNum {
+	return RCN(r, c, n)
+}
+
+func RNC(r, n, c int8) RowColNum {
+	return RCN(r, c, n)
+}
+
+func CNR(c, n, r int8) RowColNum {
+	return RCN(r, c, n)
+}
+
+func CRN(c, r, n int8) RowColNum {
+	return RCN(r, c, n)
+}
+
+func BNPtoRCN(b, n, p int8) RowColNum {
+	r, c := rcbp(b, p)
+	return RCN(r, c, n)
+}
+
+func BPNtoRCN(b, p, n int8) RowColNum {
+	r, c := rcbp(b, p)
+	return RCN(r, c, n)
+}
+
+func (rcn RowColNum) Extract() (r, c, n int8) {
 	return rcn.Row, rcn.Col, rcn.Num
+}
+
+type BlockPos struct {
+	Block, Pos int8
+}
+
+type BlockPosNum struct {
+	BlockPos
+	Num int8
+}
+
+func BPN(b, p, n int8) BlockPosNum {
+	return BlockPosNum{
+		BlockPos: BlockPos{
+			Block: b,
+			Pos:   p,
+		},
+		Num: n,
+	}
+}
+
+func (bpn BlockPosNum) RCN() RowColNum {
+	r, c := rcbp(bpn.Block, bpn.Pos)
+	return RCN(r, c, bpn.Num)
 }
 
 type Queue struct {
@@ -184,6 +246,20 @@ func (q *Queue) DiscardAll() {
 func bitwiseOr(p *int16, mask int16) int16 {
 	*p |= mask
 	return *p
+}
+
+// 将 p 设置为 v，如果没改变则返回true
+func setInt8(p *int8, v int8) bool {
+	old := *p
+	*p = v
+	return old == v
+}
+
+// 将 p 设置为 v，如果没改变则返回true
+func setInt16(p *int16, v int16) bool {
+	old := *p
+	*p = v
+	return old == v
 }
 
 type BranchChoices struct {

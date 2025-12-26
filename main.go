@@ -13,6 +13,7 @@ var (
 	flagStopAtFirstSolution = flag.Bool("one", false, "找到一个解即停止")
 	flagShowStat            = flag.Bool("stat", false, "显示运算统计信息")
 	flagShowBranch          = flag.Bool("branch", false, "显示分支结构")
+	flagGensApplyRules      = flag.Int("gens-apply-rules", 0, "在N代分支内使用复杂排除规则")
 )
 
 const MsgUsage = `使用方法：
@@ -36,6 +37,7 @@ func main() {
 		ShowProcess:         *flagShowProcess,
 		ShowBranch:          *flagShowBranch,
 		StopAtFirstSolution: *flagStopAtFirstSolution,
+		GensApplyRules:      *flagGensApplyRules,
 	}
 	startTime := time.Now()
 	count := ctx.Run(s, t)
