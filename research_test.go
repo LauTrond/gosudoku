@@ -6,32 +6,23 @@ import (
 	"testing"
 )
 
-func TestBranch(t *testing.T) {
+func TestExcludeRule(test *testing.T) {
 	puzzle, err := os.ReadFile("puzzles/hard-02.txt")
 	check(err)
-	s, tgr := ParseSituation(string(puzzle))
-	logicalEval(s, tgr)
+	s, t := ParseSituation(string(puzzle))
 	s.Show("初始", -1, -1)
 
 	ctx := NewSudokuContext()
 	count := ctx.recurseEval(DuplicateSituation(s), NewTrigger(), fmt.Sprintf("<%d>", s.Count()))
 	if count != 1 {
-		t.Fatalf("非唯一解：%d", count)
+		test.Fatalf("非唯一解：%d", count)
 	}
-	ShowCells(ctx.solutions[0], "解", -1, -1)
-}
+	solution := ctx.solutions[0]
+	ShowCells(solution, "解", -1, -1)
 
-func logicalEval(s *Situation, t *Trigger) bool {
-	for {
-		rcn, ok := t.GetConfirm()
-		if !ok {
-			break
-		}
-		if s.Set(t, rcn) {
-			if len(t.Conflicts) > 0 {
-				return false
-			}
-		}
-	}
-	return true
+	ctx = NewSudokuContext()
+	ctx.debugAnswer = solution
+	ctx.ShowBranch = true
+	ctx.GensApplyRules = 100
+	ctx.recurseEval(s, t, "")
 }

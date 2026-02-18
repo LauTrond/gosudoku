@@ -35,11 +35,27 @@ func TestHardest1905_ST(t *testing.T) {
 	}).Run(t)
 }
 
+func TestHardest1905_Rule(t *testing.T) {
+	(&BenchmarkConfig{
+		InputFile:      "assets/hardest_1905_11.txt",
+		GensApplyRules: 80,
+	}).Run(t)
+}
+
 func TestHardest1905_Pprof(t *testing.T) {
 	(&BenchmarkConfig{
 		InputFile: "assets/hardest_1905_11.txt",
-		// go tool pprof -http=:5003 output/hardest1905.pprof
-		PprofFile: "output/hardest1905.pprof",
+		// go tool pprof -http=:5003 output/hardest_1905.pprof
+		PprofFile: "output/hardest_1905.pprof",
+	}).Run(t)
+}
+
+func TestHardest1905_RulePprof(t *testing.T) {
+	(&BenchmarkConfig{
+		InputFile: "assets/hardest_1905_11.txt",
+		// go tool pprof -http=:5003 output/hardest_1905-rule.pprof
+		PprofFile:      "output/hardest_1905-rule.pprof",
+		GensApplyRules: 80,
 	}).Run(t)
 }
 
@@ -54,6 +70,22 @@ func TestHardest1905_MT(t *testing.T) {
 func TestHardest1106_ST(t *testing.T) {
 	(&BenchmarkConfig{
 		InputFile: "assets/hardest_1106.txt",
+	}).Run(t)
+}
+
+func TestHardest1106_Rule(t *testing.T) {
+	(&BenchmarkConfig{
+		InputFile:      "assets/hardest_1106.txt",
+		GensApplyRules: 80,
+	}).Run(t)
+}
+
+func TestHardest1106_RulePprof(t *testing.T) {
+	(&BenchmarkConfig{
+		InputFile: "assets/hardest_1106.txt",
+		// go tool pprof -http=:5003 output/hardest_1106-rule.pprof
+		PprofFile:      "output/hardest_1106-rule.pprof",
+		GensApplyRules: 80,
 	}).Run(t)
 }
 

@@ -15,6 +15,10 @@ type SudokuContext struct {
 	rulesDebranch int
 	branchCount   [10]int
 	solutions     []*[9][9]int8
+
+	//设置一个标准答案，用于检查计算。
+	//设置后，跳过选择错误的分支，每次计算后都检查当前局势是否和标准答案矛盾。
+	debugAnswer *[9][9]int8
 }
 
 func NewSudokuContext() *SudokuContext {
@@ -43,13 +47,13 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 	if ctx.ShowBranch {
 		fmt.Println(branchName, "开始")
 	}
-	var result bool
+	var good bool
 	if s.branchGeneration < ctx.GensApplyRules {
-		result = ctx.logicalEvalWithRules(s, t)
+		_, good = ctx.logicalEvalWithRules(s, t)
 	} else {
-		result = ctx.logicalEval(s, t)
+		_, good = ctx.logicalEval(s, t)
 	}
-	if !result {
+	if !good {
 		if ctx.ShowBranch {
 			fmt.Println(branchName, fmt.Sprintf("演算到 <%d> 矛盾", s.Count()))
 		}
@@ -68,20 +72,33 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 
 	//选取一个单元格和Num进行尝试
 	candidates := s.ChooseBranchCell1()
-	// guess := s.ChooseGuessingCell2()
+	// candidates := s.ChooseBranchCellDiffusing()
 	ctx.branchCount[candidates.Size()]++
 	if candidates.Size() == 0 {
 		return 0
 	}
 	var count int
 	for _, selected := range candidates.Choices {
+		if ctx.debugAnswer != nil {
+			if ctx.debugAnswer[selected.Row][selected.Col] != selected.Num {
+				continue
+			}
+		}
 		s2 := DuplicateSituation(s)
 		t2 := DuplicateTrigger(t)
 		s2.branchGeneration++
-		s2.Set(t2, selected)
+		if selected.Val != 0 {
+			s2.Set(t2, selected.RowColNum)
+		} else {
+			s2.Exclude(t2, selected.RowColNum)
+		}
 		ctx.evalCount++
 		if ctx.ShowProcess {
-			s2.Show("在可能的选项里猜一个", int(selected.Row), int(selected.Col))
+			if selected.Val != 0 {
+				s2.Show("在可能的选项里猜一个", int(selected.Row), int(selected.Col))
+			} else {
+				s2.Show(fmt.Sprintf("在可能的选项里排除 %d", selected.Num), int(selected.Row), int(selected.Col))
+			}
 		}
 		if len(t2.Conflicts) > 0 {
 			if ctx.ShowProcess {
@@ -93,7 +110,11 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 		} else {
 			name := ""
 			if ctx.ShowBranch {
-				name = branchName + " " + fmt.Sprintf("<%d>(%d,%d)=%d", s2.Count(), selected.Row+1, selected.Col+1, selected.Num+1)
+				eqstr := "="
+				if selected.Val == 0 {
+					eqstr = "≠"
+				}
+				name = branchName + " " + fmt.Sprintf("<%d>(%d,%d)%s%d", s2.Count(), selected.Row+1, selected.Col+1, eqstr, selected.Num+1)
 			}
 			count += ctx.recurseEval(s2, t2, name)
 		}
@@ -117,7 +138,8 @@ func (ctx *SudokuContext) recurseEval(s *Situation, t *Trigger, branchName strin
 
 // logicalEval 开始推断局势 s，直到没有找到确定的填充选项，不确保全部完成。
 // 如果返回false，表示这个局势有矛盾。
-func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
+func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) (changed int, good bool) {
+	good = true
 	for {
 		rcn, ok := t.GetConfirm()
 		if !ok {
@@ -128,8 +150,9 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 		colExcludes := countTrueBits(s.colExcludeMask[rcn.Num][rcn.Col])
 		b, _ := rcbp(rcn.Row, rcn.Col)
 		blockExcludes := countTrueBits(s.blockExcludeMask[rcn.Num][b])
-		if s.Set(t, rcn) {
+		if s.Set(t, rcn) > 0 {
 			ctx.evalCount++
+			changed++
 			if ctx.ShowProcess {
 				title := ""
 				if cellNumExcludes == 8 {
@@ -153,28 +176,39 @@ func (ctx *SudokuContext) logicalEval(s *Situation, t *Trigger) bool {
 						fmt.Println(msg)
 					}
 				}
-				return false
+				good = false
+				return
+			}
+			if ctx.debugAnswer != nil {
+				if !ctx.check(s) {
+					good = false
+					return
+				}
 			}
 		}
 	}
 	if s.Completed() && ctx.ShowProcess {
 		fmt.Println("找到了一个解")
 	}
-	return true
+	return
 }
 
 // 如果返回false，表示这个局势有矛盾。
-func (ctx *SudokuContext) logicalEvalWithRules(s *Situation, t *Trigger) bool {
-	for t.confirms.Size() > 0 {
-		if !ctx.logicalEval(s, t) {
-			return false
+func (ctx *SudokuContext) logicalEvalWithRules(s *Situation, t *Trigger) (changed int, good bool) {
+	good = true
+	for {
+		changed2, good2 := ctx.logicalEval(s, t)
+		changed += changed2
+		if !good2 {
+			good = false
+			break
 		}
 		if s.Completed() {
-			return true
+			break
 		}
-		changed := s.ApplyExcludeRules(t)
+		changed2 = s.ApplyExcludeRules(t)
 		if ctx.ShowProcess || ctx.ShowBranch {
-			fmt.Printf("应用复杂排除规则，新增排除 %d 单元格\n", changed)
+			fmt.Printf("应用复杂排除规则，新增排除 %d 单元格\n", changed2)
 		}
 		if len(t.Conflicts) > 0 || t.confirms.Size() > 0 {
 			ctx.rulesDebranch++
@@ -186,8 +220,42 @@ func (ctx *SudokuContext) logicalEvalWithRules(s *Situation, t *Trigger) bool {
 					fmt.Println(msg)
 				}
 			}
-			return false
+			good = false
+			break
+		}
+		if ctx.debugAnswer != nil {
+			if !ctx.check(s) {
+				good = false
+				break
+			}
+		}
+		if changed2 == 0 {
+			break
 		}
 	}
-	return true
+	return
+}
+
+func (ctx *SudokuContext) check(s *Situation) (good bool) {
+	good = true
+	for _, r := range loop9 {
+		for _, c := range loop9 {
+			if s.cells[r][c] == 0 {
+				return
+			}
+		}
+	}
+	for _, n := range loop9 {
+		for _, r := range loop9 {
+			for _, c := range loop9 {
+				if s.cellExclude[n][r][c] == 1 && ctx.debugAnswer[r][c] == n {
+					if ctx.ShowProcess || ctx.ShowBranch {
+						fmt.Printf("错误排除：(%d, %d) %d\n", r+1, c+1, n+1)
+					}
+					good = false
+				}
+			}
+		}
+	}
+	return
 }
