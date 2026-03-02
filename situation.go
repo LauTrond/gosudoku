@@ -20,13 +20,13 @@ type Situation struct {
 	setCount int
 
 	//numSetCount[n] = x ： n 已填充 x 次
-	numSetCount [9]int8
+	// numSetCount [9]int8
 	//rowSetCount[r] = x ： r 行已填充 x 个数
-	rowSetCount [9]int8
+	// rowSetCount [9]int8
 	//colSetCount[c] = x ： c 列已填充 x 个数
-	colSetCount [9]int8
+	// colSetCount [9]int8
 	//blockSetCount[b] = x ： 宫 b 已填充 x 个数
-	blockSetCount [9]int8
+	// blockSetCount [9]int8
 
 	//cellExclude[n][r][c] = 1 ： 单元格(r,c)排除 n
 	cellExclude [9][9][9]int8
@@ -146,10 +146,10 @@ func (s *Situation) Set(t *Trigger, rcn RowColNum) (changed int) {
 	)
 
 	s.setCount++
-	s.numSetCount[n]++
-	s.rowSetCount[r]++
-	s.colSetCount[c]++
-	s.blockSetCount[b]++
+	// s.numSetCount[n]++
+	// s.rowSetCount[r]++
+	// s.colSetCount[c]++
+	// s.blockSetCount[b]++
 
 	if !setInt16(&s.numExcludeMask[r][c], skip9mask[n]) {
 		for _, n0 := range loop9skip[n] {
@@ -344,7 +344,8 @@ func (s *Situation) ChooseBranchCell1Nums(nums int8) *BranchChoices {
 	type Candidate struct {
 		RowCol
 		// numCd, rowCd, colCd, blockCd int
-		Score int
+		Score    int
+		NumsMask int16
 	}
 	selected := Candidate{
 		RowCol: RowCol{-1, -1},
@@ -357,24 +358,28 @@ func (s *Situation) ChooseBranchCell1Nums(nums int8) *BranchChoices {
 		return s.RowColHash(candidate.RowCol) < s.RowColHash(selected.RowCol)
 	}
 	for r, rowBits := range s.numExcludeMask {
-		for c, cellBits := range rowBits {
-			cellNumExcludes := countTrueBits(cellBits)
-			if cellNumExcludes != expectingExcludes {
+		for c, numsMask := range rowBits {
+			if countTrueBits(numsMask) != expectingExcludes {
 				continue
 			}
 			b, _ := rcbp(int8(r), int8(c))
-			var score int
+			score := 100
+			tNumsMask := numsMask
 			for {
-				n := FindFirstZero(cellBits)
+				n := FindFirstZero(tNumsMask)
 				if n == -1 {
 					break
 				}
-				cellBits |= (1 << n)
-				score += 9 - int(countTrueBits(s.blockExcludeMask[n][b]))
+				tNumsMask |= (1 << n)
+				//分支选择参数选择没有理论基础，仅是在大数据集上测试为最佳的选择。
+				score += (9 - int(countTrueBits(s.blockExcludeMask[n][b]))) * 2
+				score -= 9 - int(countTrueBits(s.rowExcludeMask[n][r]))
+				score -= 9 - int(countTrueBits(s.colExcludeMask[n][c]))
 			}
 			candidate := Candidate{
-				RowCol: RowCol{int8(r), int8(c)},
-				Score:  score,
+				RowCol:   RowCol{int8(r), int8(c)},
+				Score:    score,
+				NumsMask: numsMask,
 			}
 			if isBetter(candidate) {
 				selected = candidate
@@ -385,13 +390,16 @@ func (s *Situation) ChooseBranchCell1Nums(nums int8) *BranchChoices {
 		return nil
 	}
 	r, c := selected.Row, selected.Col
-	numExcludeBits := s.numExcludeMask[r][c]
 	var tmpArray [9]int8
 	candidateNums := tmpArray[:0]
-	for n := range loop9 {
-		if numExcludeBits&(1<<n) == 0 {
-			candidateNums = append(candidateNums, int8(n))
+	tNumsMask := selected.NumsMask
+	for {
+		n := FindFirstZero(tNumsMask)
+		if n == -1 {
+			break
 		}
+		tNumsMask |= (1 << n)
+		candidateNums = append(candidateNums, n)
 	}
 	if nums == 2 && s.CompareNumInCell(r, c, candidateNums[1], candidateNums[0]) {
 		candidateNums[0], candidateNums[1] = candidateNums[1], candidateNums[0]
@@ -406,119 +414,16 @@ func (s *Situation) ChooseBranchCell1Nums(nums int8) *BranchChoices {
 
 // 选择哪个号码开始猜测，返回true表示n1比较好
 func (s *Situation) CompareNumInCell(r, c, n1, n2 int8) bool {
+	b, _ := rcbp(int8(r), int8(c))
 	//我也不知道为啥这个指标会有效，只是测试结果表明，这样蒙对的概率更高
-	score1 := int(s.numSetCount[n1])
-	score2 := int(s.numSetCount[n2])
+	score1 := int(s.blockExcludeMask[n1][b])
+	score2 := int(s.blockExcludeMask[n2][b])
 	if score1 != score2 {
 		return score1 > score2
 	}
-
 	base := int(r)*61 + int(c)*67 + s.setCount*71
 	return base*int(n1)%41 < base*int(n2)%41
 }
-
-/*
-func (s *Situation) ChooseBranchCellDiffusing() *BranchChoices {
-	type Candidate struct {
-		RowColNum
-		// numCd, rowCd, colCd, blockCd int
-		Score int
-	}
-	selected := Candidate{
-		RowColNum: RCN(-1, -1, -1),
-		Score:     0,
-	}
-
-	var visited [9][9][9]int16
-	var gid int16
-mainLoop:
-	for r, rowBits := range s.numExcludeMask {
-		for c, cellBits := range rowBits {
-			numExcludes := countTrueBits(cellBits)
-			if numExcludes >= 8 {
-				continue
-			}
-
-			for n := range loop9 {
-				if cellBits&(1<<n) > 0 {
-					continue
-				}
-				if visited[n][r][c] != 0 {
-					continue
-				}
-				gid++
-				rcn := RCN(int8(r), int8(c), int8(n))
-				count, conflict := s.diffuse(&visited, rcn, gid)
-				if conflict {
-					selected.RowColNum = rcn
-					selected.Score = count
-					break mainLoop
-				} else if count > selected.Score {
-					selected.RowColNum = rcn
-					selected.Score = count
-				}
-			}
-		}
-	}
-	if selected.Row == -1 {
-		return nil
-	}
-	result := NewBranchChoices()
-	result.AddConfirm(selected.RowColNum)
-	result.AddExclude(selected.RowColNum)
-	return result
-}
-
-func (s *Situation) diffuse(visited *[9][9][9]int16, rcn RowColNum, gid int16) (count int, conflict bool) {
-	r, c, n := rcn.Extract()
-	if visited[n][r][c] != 0 {
-		return
-	}
-	visited[n][r][c] = gid
-	count = 1
-	mergeResult := func(count1 int, conflict1 bool) {
-		count += count1
-		if conflict1 {
-			conflict = true
-		}
-	}
-	if mask := s.numExcludeMask[r][c]; mask&(1<<n) == 0 && countTrueBits(mask) == 7 {
-		n1 := pos0(mask | (1 << n))
-		if gid1 := visited[n1][r][c]; gid1 == gid {
-			conflict = true
-		} else if gid1 == 0 {
-			mergeResult(s.diffuse(visited, RCN(r, c, n1), -gid))
-		}
-	}
-	if mask := s.rowExcludeMask[n][r]; mask&(1<<c) == 0 && countTrueBits(mask) == 7 {
-		c1 := pos0(mask | (1 << c))
-		if gid1 := visited[n][r][c1]; gid1 == gid {
-			conflict = true
-		} else if gid1 == 0 {
-			mergeResult(s.diffuse(visited, RCN(r, c1, n), -gid))
-		}
-	}
-	if mask := s.colExcludeMask[n][c]; mask&(1<<r) == 0 && countTrueBits(mask) == 7 {
-		r1 := pos0(mask | (1 << r))
-		if gid1 := visited[n][r1][c]; gid1 == gid {
-			conflict = true
-		} else if gid1 == 0 {
-			mergeResult(s.diffuse(visited, RCN(r1, c, n), -gid))
-		}
-	}
-	b, p := rcbp(r, c)
-	if mask := s.blockExcludeMask[n][b]; mask&(1<<p) == 0 && countTrueBits(mask) == 7 {
-		p1 := pos0(mask | (1 << p))
-		r1, c1 := rcbp(b, p1)
-		if gid1 := visited[n][r1][c1]; gid1 == gid {
-			conflict = true
-		} else if gid1 == 0 {
-			mergeResult(s.diffuse(visited, RCN(r1, c1, n), -gid))
-		}
-	}
-	return
-}
-*/
 
 func ShowCells(cells *[9][9]int8, title string, r, c int) {
 	fmt.Println("=============================")

@@ -10,7 +10,7 @@ func (s *Situation) ApplyExcludeRules(t *Trigger) (changed int) {
 	// changed += s.applyDimVariantRule(t, s.getMaskBlockNum, s.getMaskBlockPos, BNPtoRCN)
 	// changed += s.applyDimVariantRule(t, s.getMaskBlockPos, s.getMaskBlockNum, BPNtoRCN)
 	changed += s.applyBlockExcludeRules(t)
-	changed += s.applyChainExcludeRule(t)
+	// changed += s.applyChainExcludeRule(t)
 	return
 }
 

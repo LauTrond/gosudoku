@@ -33,9 +33,6 @@ func Test17ClueContest(t *testing.T) {
 		}
 	}
 
-	*flagShowProcess = false
-	*flagStopAtFirstSolution = true
-
 	runtime.GOMAXPROCS(parallel17Clue)
 	throttle := make(chan struct{}, parallel17Clue)
 
